@@ -1,6 +1,6 @@
-# Spod App
+# FitStart App
 
-Spod is an android application which allow user to book a sport venue from anywhere at anytime using mobile phone. This project was created using the Flutter Framework. 
+FitStart is an android application which allow user to book a sport venue from anywhere at anytime using mobile phone. This project was created using the Flutter Framework.
 
 
 <div align="center">

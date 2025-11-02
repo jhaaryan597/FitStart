@@ -1,17 +1,22 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:geocoding/geocoding.dart';
 
 import '../../model/sport_field.dart';
 import '../../theme.dart';
 import '../../utils/dummy_data.dart';
 import '../../components/sport_field_list.dart';
+import '../../utils/location_service.dart';
+import '../../utils/animation_utils.dart';
 
 class SearchView extends StatefulWidget {
-  String selectedDropdownItem;
-  List<SportField> fieldList = sportFieldList;
+  final String selectedDropdownItem;
+  final List<SportField> fieldList;
 
-  SearchView({required this.selectedDropdownItem});
+  SearchView({required this.selectedDropdownItem}) : fieldList = sportFieldList;
 
   @override
   State<SearchView> createState() => _SearchViewState();
@@ -23,23 +28,133 @@ class _SearchViewState extends State<SearchView> {
   List<SportField> _fieldList = [];
   List<SportField> _selectedListByCategory = [];
   final TextEditingController _controller = TextEditingController();
+  Position? _position;
+  bool _openNowOnly = false;
+  String _sortBy = 'Nearest';
 
   @override
   void initState() {
     super.initState();
     _query = widget.selectedDropdownItem;
+    _controller.text = _query;
     _fieldList = widget.fieldList;
+    _selectedDropdownItem =
+        _query.isNotEmpty ? widget.selectedDropdownItem : 'All';
+    // initial populate
+    _applyAllFilters();
+    // try to get user location
+    _initLocation();
+  }
 
-    if (_query != "") {
-      _selectedDropdownItem = widget.selectedDropdownItem;
-      for (int i = 0; i < _fieldList.length; i++) {
-        if (_selectedDropdownItem == "All") {
-          _selectedListByCategory = _fieldList;
-        } else if (_fieldList[i].category.name == _selectedDropdownItem) {
-          _selectedListByCategory.add(_fieldList[i]);
+  Future<void> _initLocation() async {
+    // First try to load saved location from database
+    final user = Supabase.instance.client.auth.currentUser;
+    Position? pos;
+
+    if (user != null) {
+      try {
+        final data = await Supabase.instance.client
+            .from('profiles')
+            .select('saved_location')
+            .eq('id', user.id)
+            .single();
+
+        final savedLocation = data['saved_location'] as String?;
+        if (savedLocation != null && savedLocation.isNotEmpty) {
+          // Get coordinates from saved address
+          try {
+            final locations = await locationFromAddress(savedLocation);
+            if (locations.isNotEmpty) {
+              pos = Position(
+                latitude: locations.first.latitude,
+                longitude: locations.first.longitude,
+                timestamp: DateTime.now(),
+                accuracy: 0,
+                altitude: 0,
+                heading: 0,
+                speed: 0,
+                speedAccuracy: 0,
+                altitudeAccuracy: 0,
+                headingAccuracy: 0,
+              );
+            }
+          } catch (e) {
+            print('Error getting coordinates from saved location: $e');
+          }
         }
+      } catch (e) {
+        print('Error loading saved location: $e');
       }
     }
+
+    // If no saved location, try current GPS location
+    if (pos == null) {
+      pos = await LocationService.getCurrentPosition();
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _position = pos;
+      if (_position != null) {
+        for (final f in _fieldList) {
+          f.distanceKm = LocationService.distanceInKm(
+            _position!.latitude,
+            _position!.longitude,
+            f.latitude,
+            f.longitude,
+          );
+        }
+        _applyAllFilters();
+      }
+    });
+  }
+
+  void _applyAllFilters() {
+    // category
+    List<SportField> current = [];
+    if (_selectedDropdownItem == 'All') {
+      current = List.from(_fieldList);
+    } else {
+      for (final f in _fieldList) {
+        if (f.category.name == _selectedDropdownItem) current.add(f);
+      }
+    }
+    // search query filter
+    if (_query.isNotEmpty) {
+      current = current.where((field) {
+        final nameLower = field.name.toLowerCase();
+        final addressLower = field.address.toLowerCase();
+        final queryLower = _query.toLowerCase();
+        return nameLower.contains(queryLower) ||
+            addressLower.contains(queryLower);
+      }).toList();
+    }
+
+    // open now filter
+    if (_openNowOnly) {
+      current = current.where((f) => f.isOpenNow()).toList();
+    }
+    // sorting
+    switch (_sortBy) {
+      case 'Nearest':
+        if (_position != null) {
+          current.sort((a, b) => (a.distanceKm ?? double.infinity)
+              .compareTo(b.distanceKm ?? double.infinity));
+        }
+        break;
+      case 'Price: Low to High':
+        current.sort((a, b) => a.price.compareTo(b.price));
+        break;
+      case 'Price: High to Low':
+        current.sort((a, b) => b.price.compareTo(a.price));
+        break;
+      case 'Rating: High to Low':
+        current.sort((a, b) => b.rating.compareTo(a.rating));
+        break;
+    }
+    setState(() {
+      _selectedListByCategory = current;
+    });
   }
 
   @override
@@ -55,30 +170,72 @@ class _SearchViewState extends State<SearchView> {
       ),
       body: Column(
         children: [
-          Container(
+          FuturisticContainer(
             padding:
-                const EdgeInsets.only(top: 8, left: 16, right: 16, bottom: 8),
-            color: primaryColor500,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                const EdgeInsets.only(top: 8, left: 16, right: 16, bottom: 16),
+            gradientColors: [
+              primaryColor500,
+              primaryColor500.withOpacity(0.9),
+            ],
+            enableGlow: true,
+            borderRadius: BorderRadius.vertical(
+              bottom: Radius.circular(borderRadiusSize),
+            ),
+            child: Column(
               children: [
-                IconButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  icon: const Icon(CupertinoIcons.arrow_left),
-                  color: colorWhite,
+                Row(
+                  children: [
+                    ScaleOnTap(
+                      child: IconButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                        icon: const Icon(CupertinoIcons.arrow_left),
+                        color: colorWhite,
+                      ),
+                    ),
+                    const Spacer(),
+                    SlideInCard(
+                      index: 0,
+                      child: FilterChip(
+                        selected: _openNowOnly,
+                        label: const Text('Open now',
+                            style: TextStyle(fontSize: 13)),
+                        selectedColor: primaryColor100,
+                        backgroundColor: colorWhite.withOpacity(0.2),
+                        labelStyle: TextStyle(
+                          color: _openNowOnly ? darkBlue500 : colorWhite,
+                          fontSize: 13,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 0),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        onSelected: (v) {
+                          setState(() {
+                            _openNowOnly = v;
+                            _applyAllFilters();
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SlideInCard(index: 1, child: showDropdown()),
+                    const SizedBox(width: 8),
+                    SlideInCard(index: 2, child: _sortMenu()),
+                  ],
                 ),
-                showDropdown()
+                // Show search bar only if user didn't select a specific category
+                if (_selectedDropdownItem == 'All')
+                  SlideInCard(
+                    index: 3,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: searchBar(),
+                    ),
+                  ),
               ],
             ),
           ),
-          Container(
-              decoration: const BoxDecoration(
-                  color: primaryColor500,
-                  borderRadius: BorderRadius.vertical(
-                      bottom: Radius.circular(borderRadiusSize))),
-              child: searchBar()),
           Expanded(
             child: ListView(
               children: [
@@ -143,10 +300,11 @@ class _SearchViewState extends State<SearchView> {
         items: <String>[
           "All",
           "Basketball",
-          "Futsal",
+          "Football",
           "Table Tennis",
           "Tennis",
-          "Volley"
+          "Volleyball",
+          "Cricket"
         ]
             .map<DropdownMenuItem<String>>((value) => DropdownMenuItem(
                   child: Text(value),
@@ -154,66 +312,67 @@ class _SearchViewState extends State<SearchView> {
                 ))
             .toList(),
         onChanged: (value) {
-          _selectedListByCategory = [];
-          setState(() {
-            _selectedDropdownItem = value.toString();
-            for (int i = 0; i < _fieldList.length; i++) {
-              if (_selectedDropdownItem == "All") {
-                _selectedListByCategory = _fieldList;
-              } else if (_fieldList[i].category.name == _selectedDropdownItem) {
-                _selectedListByCategory.add(_fieldList[i]);
-              }
-            }
-          });
+          _selectedDropdownItem = value.toString();
+          _applyAllFilters();
         });
   }
 
+  Widget _sortMenu() {
+    return PopupMenuButton<String>(
+      color: darkBlue500,
+      icon: const Icon(Icons.sort, color: colorWhite),
+      onSelected: (value) {
+        setState(() {
+          _sortBy = value;
+          _applyAllFilters();
+        });
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(value: 'Nearest', child: Text('Nearest')),
+        const PopupMenuItem(
+            value: 'Price: Low to High', child: Text('Price: Low to High')),
+        const PopupMenuItem(
+            value: 'Price: High to Low', child: Text('Price: High to Low')),
+        const PopupMenuItem(
+            value: 'Rating: High to Low', child: Text('Rating: High to Low')),
+      ],
+    );
+  }
+
   Widget searchBar() {
-    return Padding(
-      padding: const EdgeInsets.only(
-          left: 16.0, right: 16.0, top: 0.0, bottom: 16.0),
-      child: Container(
-        decoration: BoxDecoration(
-            color: lightBlue100,
-            borderRadius: BorderRadius.circular(borderRadiusSize)),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 0.0),
-          child: TextField(
-            onChanged: (String value) {
-              setState(() {
-                _query = value;
-              });
-            },
-            onSubmitted: (String value) {
-              showDialog(
-                  context: context,
-                  builder: (context) {
-                    return AlertDialog(
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, 'OK'),
-                          child: const Text('OK'),
-                        ),
-                      ],
-                      title: const Text("Hello there :)"),
-                      content: const Text(
-                          'Sorry, the search feature is not implemented yet'),
-                    );
-                  });
-            },
-            controller: _controller,
-            decoration: InputDecoration(
-                border: InputBorder.none,
-                hintText: "Search...",
-                suffixIcon: _controller.text.isEmpty
-                    ? Container(
-                        width: 0,
-                      )
-                    : IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => _controller.clear(),
-                      )),
-          ),
+    return Container(
+      decoration: BoxDecoration(
+          color: colorWhite,
+          borderRadius: BorderRadius.circular(borderRadiusSize)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 0.0),
+        child: TextField(
+          onChanged: (String value) {
+            setState(() {
+              _query = value;
+            });
+            _applyAllFilters();
+          },
+          onSubmitted: (String value) {
+            _applyAllFilters();
+          },
+          controller: _controller,
+          decoration: InputDecoration(
+              border: InputBorder.none,
+              hintText: "Search venues...",
+              prefixIcon: const Icon(Icons.search, color: primaryColor500),
+              suffixIcon: _controller.text.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.close, color: primaryColor500),
+                      onPressed: () {
+                        _controller.clear();
+                        setState(() {
+                          _query = "";
+                        });
+                        _applyAllFilters();
+                      },
+                    )),
         ),
       ),
     );

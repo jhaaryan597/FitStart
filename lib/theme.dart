@@ -1,57 +1,147 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-const Color primaryColor100 = Color(0xffbcdaff);
-const Color primaryColor300 = Color(0xff88aad6);
-const Color primaryColor500 = Color(0xff2083F8);
-const Color colorWhite = Colors.white;
-const Color backgroundColor = Color(0xffF5F9FF);
-const Color lightBlue100 = Color(0xffF0F6FF);
-const Color lightBlue300 = Color(0xffD2DFF0);
-const Color lightBlue400 = Color(0xffBFC8D2);
-const Color darkBlue300 = Color(0xff526983);
-const Color darkBlue500 = Color(0xff293948);
-const Color darkBlue700 = Color(0xff17212B);
+// Brand Color Palette
+const Color neonGreen = Color(0xFF656D4A); // #656D4A - Primary brand color
+const Color colorWhite = Color(0xFFFFFFFF); // #FFFFFF - White
+const Color lightGray = Color(0xFFE3E3E3); // #E3E3E3 - Light gray
+const Color colorBlack =
+    Color(0xFF333D29); // #333D29 - Dark green for text/icons
+const Color lightGreen = Color(0xFFA4AC86); // #A4AC86 - Light accent green
 
-const neutral50 = Color(0xFFEEF0F4);
-const neutral200 = Color(0xFFB1BACC);
-const neutral400 = Color(0xFF7786A7);
-const neutral500 = Color(0xFF556891);
-const neutral700 = Color(0xFF3C4A67);
+// Derived colors for better UI
+const Color primaryColor = neonGreen;
+const Color backgroundColor =
+    Color(0xFFA4AC86); // #A4AC86 - Sage green background
+const Color surfaceColor = Color(0xFFA4AC86); // #A4AC86 - Sage green for cards
+const Color textPrimary =
+    Color(0xFF333D29); // #333D29 - Dark green for primary text
+const Color textSecondary =
+    Color(0xFF5A6650); // Slightly lighter green for secondary text
+const Color borderColor = Color(0xFF8B9475); // Darker sage for borders
+const Color accentColor = lightGreen;
+
+// Legacy color names for backward compatibility
+const Color primaryColor100 = lightGreen;
+const Color primaryColor300 = neonGreen;
+const Color primaryColor500 = neonGreen;
+const Color darkBlue300 = textSecondary;
+const Color darkBlue500 = textPrimary;
+const Color darkBlue700 = textPrimary;
+
+// Additional legacy colors mapped to new palette
+const Color lightBlue100 = surfaceColor; // Sage green surface
+const Color lightBlue300 = borderColor;
+const Color lightBlue400 = borderColor;
+const Color neutral50 = surfaceColor; // Sage green surface
+const Color neutral200 = borderColor;
+const Color neutral400 = textSecondary;
+const Color neutral500 = textSecondary;
+const Color neutral700 = textPrimary;
 
 const double borderRadiusSize = 16.0;
 
+class AppTheme {
+  static final ThemeData lightTheme = ThemeData(
+    brightness: Brightness.light,
+    primaryColor: primaryColor,
+    scaffoldBackgroundColor: backgroundColor,
+    colorScheme: const ColorScheme.light(
+      primary: primaryColor,
+      secondary: accentColor,
+      background: backgroundColor,
+      surface: surfaceColor,
+    ),
+    textTheme: TextTheme(
+      displayLarge: GoogleFonts.poppins(
+          fontSize: 24, fontWeight: FontWeight.w700, color: textPrimary),
+      displayMedium: GoogleFonts.poppins(
+          fontSize: 18, fontWeight: FontWeight.w700, color: textPrimary),
+      titleMedium: GoogleFonts.poppins(
+          fontSize: 16, fontWeight: FontWeight.w500, color: textPrimary),
+      bodyLarge: GoogleFonts.poppins(color: textPrimary),
+      bodyMedium: GoogleFonts.poppins(
+          fontSize: 14, fontWeight: FontWeight.w400, color: textSecondary),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: primaryColor,
+        foregroundColor: textPrimary,
+        textStyle: GoogleFonts.poppins(
+            fontSize: 16, fontWeight: FontWeight.w600, color: textPrimary),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(borderRadiusSize),
+        ),
+      ),
+    ),
+  );
+
+  static final ThemeData darkTheme = ThemeData(
+    brightness: Brightness.dark,
+    primaryColor: primaryColor,
+    scaffoldBackgroundColor: textPrimary,
+    colorScheme: const ColorScheme.dark(
+      primary: primaryColor,
+      secondary: accentColor,
+      background: Color(0xFF333D29),
+      surface: Color(0xFF2A3322),
+    ),
+    textTheme: TextTheme(
+      displayLarge: GoogleFonts.poppins(
+          fontSize: 24, fontWeight: FontWeight.w700, color: colorWhite),
+      displayMedium: GoogleFonts.poppins(
+          fontSize: 18, fontWeight: FontWeight.w700, color: colorWhite),
+      titleMedium: GoogleFonts.poppins(
+          fontSize: 16, fontWeight: FontWeight.w500, color: colorWhite),
+      bodyLarge: GoogleFonts.poppins(color: colorWhite),
+      bodyMedium: GoogleFonts.poppins(
+          fontSize: 14, fontWeight: FontWeight.w400, color: Color(0xFFB8BFB0)),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: primaryColor,
+        foregroundColor: textPrimary,
+        textStyle: GoogleFonts.poppins(
+            fontSize: 16, fontWeight: FontWeight.w600, color: textPrimary),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(borderRadiusSize),
+        ),
+      ),
+    ),
+  );
+}
+
 TextStyle greetingTextStyle = GoogleFonts.poppins(
-    fontSize: 24, fontWeight: FontWeight.w700, color: darkBlue500);
+    fontSize: 24, fontWeight: FontWeight.w700, color: textPrimary);
 
 TextStyle titleTextStyle = GoogleFonts.poppins(
-    fontSize: 18, fontWeight: FontWeight.w700, color: darkBlue500);
+    fontSize: 18, fontWeight: FontWeight.w700, color: textPrimary);
 
 TextStyle subTitleTextStyle = GoogleFonts.poppins(
-    fontSize: 16, fontWeight: FontWeight.w500, color: darkBlue500);
+    fontSize: 16, fontWeight: FontWeight.w500, color: textPrimary);
 
-TextStyle normalTextStyle = GoogleFonts.poppins(color: darkBlue500);
+TextStyle normalTextStyle = GoogleFonts.poppins(color: textPrimary);
 
 TextStyle descTextStyle = GoogleFonts.poppins(
-    fontSize: 14, fontWeight: FontWeight.w400, color: darkBlue300);
+    fontSize: 14, fontWeight: FontWeight.w400, color: textSecondary);
 
 TextStyle addressTextStyle = GoogleFonts.poppins(
-    fontSize: 14, fontWeight: FontWeight.w400, color: darkBlue300);
+    fontSize: 14, fontWeight: FontWeight.w400, color: textSecondary);
 
 TextStyle facilityTextStyle = GoogleFonts.poppins(
-    fontSize: 13, fontWeight: FontWeight.w500, color: darkBlue300);
+    fontSize: 13, fontWeight: FontWeight.w500, color: textSecondary);
 
 TextStyle priceTextStyle = GoogleFonts.poppins(
-    fontSize: 16, fontWeight: FontWeight.w700, color: darkBlue500);
+    fontSize: 16, fontWeight: FontWeight.w700, color: textPrimary);
 
 TextStyle buttonTextStyle = GoogleFonts.poppins(
-    fontSize: 16, fontWeight: FontWeight.w600, color: colorWhite);
+    fontSize: 16, fontWeight: FontWeight.w600, color: textPrimary);
 
 TextStyle bottomNavTextStyle = GoogleFonts.poppins(
-    fontSize: 12, fontWeight: FontWeight.w500, color: primaryColor500);
+    fontSize: 12, fontWeight: FontWeight.w500, color: primaryColor);
 
 TextStyle tabBarTextStyle =
-    GoogleFonts.poppins(fontWeight: FontWeight.w500, color: primaryColor500);
+    GoogleFonts.poppins(fontWeight: FontWeight.w500, color: primaryColor);
 
 MaterialColor createMaterialColor(Color color) {
   List strengths = <double>[.05];

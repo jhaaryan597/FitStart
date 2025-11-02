@@ -1,70 +1,203 @@
+import 'dart:math';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:spod_app/model/sport_field.dart';
-import 'package:spod_app/modules/booking/booking_view.dart';
-import 'package:spod_app/theme.dart';
-import 'package:spod_app/components/facility_card.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:FitStart/model/sport_field.dart';
+import 'package:FitStart/modules/booking/booking_view.dart';
+import 'package:FitStart/theme.dart';
+import 'package:FitStart/components/facility_card.dart';
+import 'package:FitStart/services/favorites_service.dart';
+import 'package:FitStart/services/ml_recommendation_service.dart';
+import 'package:FitStart/utils/animation_utils.dart';
 
-class DetailView extends StatelessWidget {
-  SportField field;
+class DetailView extends StatefulWidget {
+  final SportField field;
 
-  DetailView({required this.field});
+  const DetailView({Key? key, required this.field}) : super(key: key);
+
+  @override
+  State<DetailView> createState() => _DetailViewState();
+}
+
+class _DetailViewState extends State<DetailView> {
+  bool _isFavorite = false;
+  bool _isLoadingFavorite = true;
+  late List<String> _sportImages;
+  final PageController _pageController = PageController();
+  int _currentImageIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _generateSportImages();
+    _checkFavoriteStatus();
+    // Track venue view for ML recommendations
+    MLRecommendationService.trackVenueView(widget.field.id);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _generateSportImages() {
+    final category = widget.field.category.name;
+    final random = Random();
+
+    List<String> availableImages = [];
+
+    switch (category) {
+      case 'Basketball':
+        availableImages = ['bb1.jpg', 'bb2.jpg', 'bb3.jpg'];
+        break;
+      case 'Football':
+        availableImages = ['fb1.jpg', 'fb2.jpg', 'fb3.jpg'];
+        break;
+      case 'Volleyball':
+        availableImages = ['vb1.jpg', 'vb2.jpg', 'vb3.jpg'];
+        break;
+      case 'Table Tennis':
+        availableImages = ['tt1.jpg', 'tt2.jpg', 'tt3.jpg'];
+        break;
+      case 'Tennis':
+        availableImages = ['ten1.jpg', 'ten2.jpg', 'ten3.jpg'];
+        break;
+      case 'Cricket':
+        availableImages = [
+          'cric1.jpg',
+          'cric2.jpg',
+          'cric3.jpg',
+          'cric4.jpg',
+          'cric5.jpg',
+          'cric6.jpg'
+        ];
+        break;
+      default:
+        availableImages = [widget.field.imageAsset];
+    }
+
+    availableImages.shuffle(random);
+    _sportImages = availableImages
+        .take(3)
+        .map((img) => img.startsWith('assets/') ? img : 'assets/images/$img')
+        .toList();
+  }
+
+  Future<void> _checkFavoriteStatus() async {
+    final isFav = await FavoritesService.isFavorite(widget.field.id);
+    if (mounted) {
+      setState(() {
+        _isFavorite = isFav;
+        _isLoadingFavorite = false;
+      });
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    final success = await FavoritesService.toggleFavorite(widget.field.id);
+    if (success && mounted) {
+      setState(() {
+        _isFavorite = !_isFavorite;
+      });
+
+      // Track favorite/unfavorite for ML recommendations
+      if (_isFavorite) {
+        MLRecommendationService.trackFavorite(widget.field.id, 'sports_venue');
+      } else {
+        MLRecommendationService.trackUnfavorite(
+            widget.field.id, 'sports_venue');
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isFavorite ? 'Added to favorites' : 'Removed from favorites',
+          ),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          customSliverAppBar(context, field),
+          customSliverAppBar(context, widget.field),
           SliverPadding(
             padding:
                 const EdgeInsets.only(right: 24, left: 24, bottom: 24, top: 8),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Image.asset(
-                      "assets/icons/pin.png",
-                      width: 24,
-                      height: 24,
-                      color: primaryColor500,
+                SlideInCard(
+                  index: 0,
+                  child: FuturisticContainer(
+                    padding: const EdgeInsets.all(16),
+                    gradientColors: [
+                      primaryColor100.withOpacity(0.3),
+                      Colors.white,
+                    ],
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        PulseAnimation(
+                          child: Image.asset(
+                            "assets/icons/pin.png",
+                            width: 24,
+                            height: 24,
+                            color: primaryColor500,
+                          ),
+                        ),
+                        const SizedBox(
+                          width: 16.0,
+                        ),
+                        Flexible(
+                          child: Text(
+                            widget.field.address,
+                            overflow: TextOverflow.visible,
+                            style: addressTextStyle,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(
-                      width: 16.0,
-                    ),
-                    Flexible(
-                      child: Text(
-                        field.address,
-                        overflow: TextOverflow.visible,
-                        style: addressTextStyle,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
                 const SizedBox(
                   height: 16,
                 ),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      CupertinoIcons.money_dollar_circle_fill,
-                      color: primaryColor500,
+                SlideInCard(
+                  index: 1,
+                  child: FuturisticContainer(
+                    padding: const EdgeInsets.all(16),
+                    gradientColors: [
+                      primaryColor100.withOpacity(0.3),
+                      Colors.white,
+                    ],
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        PulseAnimation(
+                          child: const Icon(
+                            CupertinoIcons.money_dollar_circle_fill,
+                            color: primaryColor500,
+                          ),
+                        ),
+                        const SizedBox(
+                          width: 16.0,
+                        ),
+                        Flexible(
+                          child: Text(
+                            "₹ ${widget.field.price} / hour",
+                            overflow: TextOverflow.visible,
+                            style: addressTextStyle,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(
-                      width: 16.0,
-                    ),
-                    Flexible(
-                      child: Text(
-                        "Rp. ${field.price} / hour",
-                        overflow: TextOverflow.visible,
-                        style: addressTextStyle,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
                 const SizedBox(
                   height: 32,
@@ -88,7 +221,7 @@ class DetailView extends StatelessWidget {
                     ),
                     Flexible(
                       child: Text(
-                        field.phoneNumber,
+                        widget.field.phoneNumber,
                         overflow: TextOverflow.visible,
                         style: addressTextStyle,
                       ),
@@ -110,7 +243,7 @@ class DetailView extends StatelessWidget {
                     ),
                     Flexible(
                       child: Text(
-                        field.author,
+                        widget.field.author,
                         overflow: TextOverflow.visible,
                         style: addressTextStyle,
                       ),
@@ -144,7 +277,7 @@ class DetailView extends StatelessWidget {
                       width: 16.0,
                     ),
                     Text(
-                      field.openDay,
+                      widget.field.openDay,
                       style: descTextStyle,
                     ),
                   ],
@@ -162,7 +295,7 @@ class DetailView extends StatelessWidget {
                       width: 16.0,
                     ),
                     Text(
-                      "${field.openTime} - ${field.closeTime}",
+                      "${widget.field.openTime} - ${widget.field.closeTime}",
                       style: descTextStyle,
                     ),
                   ],
@@ -177,7 +310,7 @@ class DetailView extends StatelessWidget {
                 const SizedBox(
                   height: 16,
                 ),
-                FacilityCardList(facilities: field.facilities),
+                FacilityCardList(facilities: widget.field.facilities),
               ]),
             ),
           )
@@ -200,7 +333,7 @@ class DetailView extends StatelessWidget {
             onPressed: () {
               Navigator.push(context, MaterialPageRoute(builder: (context) {
                 return BookingView(
-                  field: field,
+                  field: widget.field,
                 );
               }));
             },
@@ -231,83 +364,149 @@ class DetailView extends StatelessWidget {
                   top: Radius.circular(borderRadiusSize))),
           child: Center(
             child: Text(
-              field.name,
+              widget.field.name,
               style: titleTextStyle,
               overflow: TextOverflow.ellipsis,
             ),
           ),
         ),
-        background: Image.asset(
-          field.imageAsset,
-          fit: BoxFit.cover,
+        background: Stack(
+          fit: StackFit.expand,
+          children: [
+            PageView.builder(
+              controller: _pageController,
+              itemCount: _sportImages.length,
+              onPageChanged: (index) {
+                setState(() {
+                  _currentImageIndex = index;
+                });
+              },
+              itemBuilder: (context, index) {
+                return ShaderMask(
+                  shaderCallback: (bounds) {
+                    return LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withOpacity(0.3),
+                        Colors.transparent,
+                        Colors.black.withOpacity(0.7),
+                      ],
+                    ).createShader(bounds);
+                  },
+                  blendMode: BlendMode.darken,
+                  child: Image.asset(
+                    _sportImages[index],
+                    fit: BoxFit.cover,
+                  ),
+                );
+              },
+            ),
+            // Page Indicator
+            Positioned(
+              bottom: 80,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  _sportImages.length,
+                  (index) => Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _currentImageIndex == index
+                          ? primaryColor500
+                          : Colors.white.withOpacity(0.5),
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         collapseMode: CollapseMode.parallax,
       ),
       leading: Padding(
         padding: const EdgeInsets.all(8.0),
-        child: Container(
-          decoration: const BoxDecoration(
-            color: colorWhite,
-            shape: BoxShape.circle,
+        child: ScaleOnTap(
+          child: Container(
+            decoration: BoxDecoration(
+              color: colorWhite,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: primaryColor500.withOpacity(0.3),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: IconButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                iconSize: 26,
+                icon: const Icon(
+                  Icons.arrow_back,
+                  color: darkBlue500,
+                )),
           ),
-          child: IconButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              iconSize: 26,
-              icon: const Icon(
-                Icons.arrow_back,
-                color: darkBlue500,
-              )),
         ),
       ),
       actions: [
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: Container(
-            decoration: const BoxDecoration(
-              color: colorWhite,
-              shape: BoxShape.circle,
-            ),
-            child: PopupMenuButton(
-              tooltip: "Image's Author Url",
-              padding: EdgeInsets.zero,
-              icon: const Icon(CupertinoIcons.info, color: darkBlue500),
-              itemBuilder: (BuildContext context) => <PopupMenuEntry>[
-                PopupMenuItem(
-                    enabled: false,
-                    child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                            color: lightBlue100,
-                            borderRadius: BorderRadius.circular(8)),
-                        child: Text(
-                          "Image by:",
-                          style: subTitleTextStyle,
-                        ))),
-                PopupMenuItem(
-                    onTap: () => launch(field.authorUrl),
-                    child: ListTile(
-                      horizontalTitleGap: 0,
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.account_circle_outlined),
-                      title: Text(
-                        "${field.author} on Unsplash.com",
-                        style: normalTextStyle,
+          child: ScaleOnTap(
+            child: Container(
+              decoration: BoxDecoration(
+                color: colorWhite,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryColor500.withOpacity(0.3),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: _isLoadingFavorite
+                  ? const Padding(
+                      padding: EdgeInsets.all(12.0),
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: darkBlue500,
+                        ),
                       ),
-                    )),
-                PopupMenuItem(
-                    onTap: () => launch(field.imageUrl),
-                    child: ListTile(
-                      horizontalTitleGap: 0,
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.image_outlined),
-                      title: Text(
-                        "See original image",
-                        style: normalTextStyle,
-                      ),
-                    )),
-              ],
+                    )
+                  : (_isFavorite
+                      ? PulseAnimation(
+                          child: IconButton(
+                            onPressed: _toggleFavorite,
+                            icon: const Icon(
+                              Icons.favorite,
+                              color: Colors.red,
+                            ),
+                            tooltip: 'Remove from favorites',
+                          ),
+                        )
+                      : IconButton(
+                          onPressed: _toggleFavorite,
+                          icon: const Icon(
+                            Icons.favorite_border,
+                            color: darkBlue500,
+                          ),
+                          tooltip: 'Add to favorites',
+                        )),
             ),
           ),
         )

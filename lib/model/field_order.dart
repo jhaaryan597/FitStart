@@ -1,5 +1,5 @@
-import 'package:spod_app/model/sport_field.dart';
-import 'package:spod_app/model/user.dart';
+import 'package:FitStart/model/sport_field.dart';
+import 'package:FitStart/model/user.dart';
 
 class FieldOrder {
   SportField field;

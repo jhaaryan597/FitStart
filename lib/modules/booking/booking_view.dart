@@ -1,18 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:spod_app/model/checkbox_state.dart';
-import 'package:spod_app/model/field_order.dart';
-import 'package:spod_app/model/sport_field.dart';
-import 'package:spod_app/modules/root/root_view.dart';
-import 'package:spod_app/theme.dart';
-import 'package:spod_app/utils/dummy_data.dart';
-import 'package:spod_app/utils/time_utils.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:FitStart/model/field_order.dart';
+import 'package:FitStart/model/sport_field.dart';
+import 'package:FitStart/modules/root/root_view.dart';
+import 'package:FitStart/theme.dart';
+import 'package:FitStart/utils/dummy_data.dart';
+import 'package:FitStart/utils/time_utils.dart';
+import 'package:FitStart/utils/razorpay_service.dart';
+import 'package:FitStart/utils/animation_utils.dart';
+import 'package:FitStart/services/favorites_service.dart';
+import 'package:FitStart/services/ml_recommendation_service.dart';
 
 class BookingView extends StatefulWidget {
-  SportField field;
+  final SportField field;
 
-  BookingView({required this.field});
+  const BookingView({Key? key, required this.field}) : super(key: key);
 
   @override
   State<BookingView> createState() => _BookingViewState();
@@ -40,12 +45,172 @@ class _BookingViewState extends State<BookingView> {
   bool _enableCreateOrderBtn = false;
   final List<String> _selectedTimes = [];
 
+  // Razorpay
+  late RazorpayService _razorpayService;
+
+  // Favorites
+  bool _isFavorite = false;
+  bool _isLoadingFavorite = true;
+
   @override
   void initState() {
     super.initState();
     _controller.addListener(() {
       setState(() {});
     });
+
+    // Initialize Razorpay
+    _razorpayService = RazorpayService();
+    _razorpayService.onPaymentSuccess = _handlePaymentSuccess;
+    _razorpayService.onPaymentError = _handlePaymentError;
+    _razorpayService.onExternalWallet = _handleExternalWallet;
+
+    // Check favorite status
+    _checkFavoriteStatus();
+  }
+
+  Future<void> _checkFavoriteStatus() async {
+    final isFav = await FavoritesService.isFavorite(widget.field.id);
+    if (mounted) {
+      setState(() {
+        _isFavorite = isFav;
+        _isLoadingFavorite = false;
+      });
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    final success = await FavoritesService.toggleFavorite(widget.field.id);
+    if (success && mounted) {
+      setState(() {
+        _isFavorite = !_isFavorite;
+      });
+
+      // Track favorite/unfavorite for ML recommendations
+      if (_isFavorite) {
+        MLRecommendationService.trackFavorite(widget.field.id, 'sports_venue');
+      } else {
+        MLRecommendationService.trackUnfavorite(
+            widget.field.id, 'sports_venue');
+      }
+
+      _showSnackBar(
+        context,
+        _isFavorite ? 'Added to favorites' : 'Removed from favorites',
+      );
+    }
+  }
+
+  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
+    // Payment was successful
+    DateTime selectedDateTime =
+        DateTime(_selectedYear, _selectedMonth, _selectedDate);
+
+    // Add to dummy list for backward compatibility
+    dummyUserOrderList.add(
+      FieldOrder(
+        field: widget.field,
+        user: sampleUser,
+        selectedDate: dateFormat.format(selectedDateTime).toString(),
+        selectedTime: _selectedTimes,
+      ),
+    );
+
+    // Save to Supabase
+    await _saveOrderToSupabase(
+      paymentStatus: 'paid',
+      paymentMethod: 'razorpay',
+      razorpayPaymentId: response.paymentId,
+      razorpayOrderId: response.orderId,
+      razorpaySignature: response.signature,
+    );
+
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => RootView(currentScreen: 1)),
+          (route) => false);
+
+      _showSnackBar(context, "Payment successful! Order created.");
+    }
+  }
+
+  Future<void> _saveOrderToSupabase({
+    required String paymentStatus,
+    required String paymentMethod,
+    String? razorpayPaymentId,
+    String? razorpayOrderId,
+    String? razorpaySignature,
+  }) async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      DateTime selectedDateTime =
+          DateTime(_selectedYear, _selectedMonth, _selectedDate);
+
+      await Supabase.instance.client.from('orders').insert({
+        'user_id': user.id,
+        'venue_id': widget.field.id,
+        'venue_name': widget.field.name,
+        'venue_type': 'sports_venue',
+        'booking_date': dateFormat.format(selectedDateTime).toString(),
+        'booking_times': _selectedTimes,
+        'total_amount': _totalBill,
+        'payment_status': paymentStatus,
+        'payment_method': paymentMethod,
+        'razorpay_payment_id': razorpayPaymentId,
+        'razorpay_order_id': razorpayOrderId,
+        'razorpay_signature': razorpaySignature,
+      });
+
+      // Track booking for ML recommendations
+      MLRecommendationService.trackVenueBooking(widget.field.id);
+    } catch (e) {
+      print('Error saving order to Supabase: $e');
+    }
+  }
+
+  Future<void> _handlePayAtVenue() async {
+    // Payment will be done at venue
+    DateTime selectedDateTime =
+        DateTime(_selectedYear, _selectedMonth, _selectedDate);
+
+    // Add to dummy list for backward compatibility
+    dummyUserOrderList.add(
+      FieldOrder(
+        field: widget.field,
+        user: sampleUser,
+        selectedDate: dateFormat.format(selectedDateTime).toString(),
+        selectedTime: _selectedTimes,
+      ),
+    );
+
+    // Save to Supabase
+    await _saveOrderToSupabase(
+      paymentStatus: 'pay_at_venue',
+      paymentMethod: 'pay_at_venue',
+    );
+
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => RootView(currentScreen: 1)),
+          (route) => false);
+
+      _showSnackBar(context, "Booking confirmed! Pay at venue.");
+    }
+  }
+
+  void _handlePaymentError(PaymentFailureResponse response) {
+    // Payment failed
+    _showSnackBar(
+        context, "Payment failed: ${response.message ?? 'Unknown error'}");
+  }
+
+  void _handleExternalWallet() {
+    // External wallet was selected
+    _showSnackBar(context, "External wallet selected");
   }
 
   @override
@@ -53,15 +218,49 @@ class _BookingViewState extends State<BookingView> {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          const SliverAppBar(
-            systemOverlayStyle: SystemUiOverlayStyle(
-              statusBarColor: colorWhite,
+          SliverAppBar(
+            systemOverlayStyle: const SystemUiOverlayStyle(
+              statusBarColor: backgroundColor,
               statusBarIconBrightness: Brightness.dark,
             ),
-            title: Text("Booking"),
-            backgroundColor: colorWhite,
+            title: const Text("Booking"),
+            backgroundColor: backgroundColor,
             centerTitle: true,
             foregroundColor: primaryColor500,
+            actions: [
+              _isLoadingFavorite
+                  ? const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                        ),
+                      ),
+                    )
+                  : ScaleOnTap(
+                      child: (_isFavorite
+                          ? PulseAnimation(
+                              child: IconButton(
+                                icon: const Icon(
+                                  Icons.favorite,
+                                  color: Colors.red,
+                                ),
+                                onPressed: _toggleFavorite,
+                                tooltip: 'Remove from favorites',
+                              ),
+                            )
+                          : IconButton(
+                              icon: const Icon(
+                                Icons.favorite_border,
+                                color: primaryColor500,
+                              ),
+                              onPressed: _toggleFavorite,
+                              tooltip: 'Add to favorites',
+                            )),
+                    ),
+            ],
           ),
           SliverPadding(
             padding:
@@ -164,7 +363,10 @@ class _BookingViewState extends State<BookingView> {
                                       ),
                                     ),
                                   ),
-                                  Text("$_selectedMonthName $_selectedYear", style: descTextStyle,),
+                                  Text(
+                                    "$_selectedMonthName $_selectedYear",
+                                    style: descTextStyle,
+                                  ),
                                   GestureDetector(
                                     onTap: () {
                                       if (_isNextMonthValid) {
@@ -260,7 +462,6 @@ class _BookingViewState extends State<BookingView> {
                           ),
                         ),
                       ),
-
                       Padding(
                         padding: const EdgeInsets.only(top: 32),
                         child: Container(
@@ -272,7 +473,10 @@ class _BookingViewState extends State<BookingView> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text("Pick a Time", style: subTitleTextStyle,),
+                              Text(
+                                "Pick a Time",
+                                style: subTitleTextStyle,
+                              ),
                               const SizedBox(
                                 height: 8,
                               ),
@@ -292,7 +496,10 @@ class _BookingViewState extends State<BookingView> {
                                       const SizedBox(
                                         width: 8,
                                       ),
-                                      Text("Choosed", style: descTextStyle,)
+                                      Text(
+                                        "Choosed",
+                                        style: descTextStyle,
+                                      )
                                     ],
                                   ),
                                   const SizedBox(
@@ -310,7 +517,10 @@ class _BookingViewState extends State<BookingView> {
                                       const SizedBox(
                                         width: 8,
                                       ),
-                                      Text("Empty", style: descTextStyle,)
+                                      Text(
+                                        "Empty",
+                                        style: descTextStyle,
+                                      )
                                     ],
                                   ),
                                   const SizedBox(
@@ -328,7 +538,10 @@ class _BookingViewState extends State<BookingView> {
                                       const SizedBox(
                                         width: 8,
                                       ),
-                                      Text("Not Available", style: descTextStyle,)
+                                      Text(
+                                        "Not Available",
+                                        style: descTextStyle,
+                                      )
                                     ],
                                   ),
                                 ],
@@ -353,7 +566,8 @@ class _BookingViewState extends State<BookingView> {
                                             debugPrint(
                                                 "selected time: $_selectedTime");
 
-                                            if (_selectedTimes.contains(e.time)) {
+                                            if (_selectedTimes
+                                                .contains(e.time)) {
                                               _selectedTimes.remove(e.time);
                                               _enableCreateOrderBtn =
                                                   _selectedTimes.isNotEmpty &&
@@ -434,7 +648,7 @@ class _BookingViewState extends State<BookingView> {
                   style: descTextStyle,
                 ),
                 Text(
-                  "Rp $_totalBill",
+                  "INR $_totalBill",
                   style: priceTextStyle,
                 ),
               ],
@@ -452,40 +666,126 @@ class _BookingViewState extends State<BookingView> {
                   onPressed: !_enableCreateOrderBtn
                       ? null
                       : () {
-                          // List<String> selectedTime = [];
-                          // for (int i = 0; i < availableBookTime.length; i++) {
-                          //   if (availableBookTime[i].value) {
-                          //     selectedTime.add(availableBookTime[i].title);
-                          //   }
-                          // }
-                          DateTime selectedDateTime = DateTime(
-                              _selectedYear, _selectedMonth, _selectedDate);
-
-                          dummyUserOrderList.add(
-                            FieldOrder(
-                              field: widget.field,
-                              user: sampleUser,
-                              selectedDate: dateFormat.format(selectedDateTime).toString(),
-                              selectedTime: _selectedTimes,
-                            ),
-                          );
-                          Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) =>
-                                      RootView(currentScreen: 1)),
-                              (route) => false);
-                          _showSnackBar(
-                              context, "Successfully create an order");
+                          _showPaymentOptionsDialog();
                         },
                   child: Text(
-                    "Create Order",
+                    "Proceed to Pay",
                     style: buttonTextStyle,
                   )),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  void _showPaymentOptionsDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(
+            'Choose Payment Method',
+            style: titleTextStyle,
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Online Payment Option
+              InkWell(
+                onTap: () {
+                  Navigator.pop(context);
+                  // Open Razorpay payment
+                  DateTime selectedDateTime =
+                      DateTime(_selectedYear, _selectedMonth, _selectedDate);
+
+                  String description =
+                      "Booking for ${widget.field.name} on ${dateFormat.format(selectedDateTime)}";
+
+                  _razorpayService.openCheckout(
+                    amount: _totalBill * 100, // Convert to paisa
+                    name: widget.field.name,
+                    description: description,
+                    prefillContact: '9999999999',
+                    prefillEmail: 'test@example.com',
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: primaryColor500.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(borderRadiusSize),
+                    border: Border.all(color: primaryColor500),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.payment, color: primaryColor500, size: 28),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Pay Online',
+                              style: subTitleTextStyle,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Pay now via Razorpay',
+                              style: descTextStyle.copyWith(fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.arrow_forward_ios,
+                          color: primaryColor500, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Pay at Venue Option
+              InkWell(
+                onTap: () {
+                  Navigator.pop(context);
+                  _handlePayAtVenue();
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: neonGreen.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(borderRadiusSize),
+                    border: Border.all(color: neonGreen),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.store, color: neonGreen, size: 28),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Pay at Venue',
+                              style: subTitleTextStyle,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Pay when you arrive',
+                              style: descTextStyle.copyWith(fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.arrow_forward_ios, color: neonGreen, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -502,6 +802,7 @@ class _BookingViewState extends State<BookingView> {
   @override
   void dispose() {
     _controller.dispose();
+    _razorpayService.dispose();
     super.dispose();
   }
 }

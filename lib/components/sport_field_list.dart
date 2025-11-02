@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:spod_app/model/sport_field.dart';
-import 'package:spod_app/modules/detail/detail_venue_view.dart';
-import 'package:spod_app/theme.dart';
-
+import 'package:FitStart/model/sport_field.dart';
+import 'package:FitStart/modules/detail/detail_venue_view.dart';
+import 'package:FitStart/theme.dart';
 
 class SportFieldList extends StatelessWidget {
-  SportField field;
+  final SportField field;
 
   SportFieldList({required this.field});
 
@@ -15,9 +14,11 @@ class SportFieldList extends StatelessWidget {
       padding: const EdgeInsets.only(right: 16, left: 16, bottom: 16.0),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: (){
-          Navigator.push(context, MaterialPageRoute(builder: (context){
-            return DetailView(field: field,);
+        onTap: () {
+          Navigator.push(context, MaterialPageRoute(builder: (context) {
+            return DetailView(
+              field: field,
+            );
           }));
         },
         child: Container(
@@ -30,28 +31,52 @@ class SportFieldList extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               ClipRRect(
-                borderRadius:
-                BorderRadius.circular(borderRadiusSize),
+                borderRadius: BorderRadius.circular(borderRadiusSize),
                 child: Image.asset(field.imageAsset,
-                    height: 65,
-                    width: 100,
-                    fit: BoxFit.cover),
+                    height: 65, width: 100, fit: BoxFit.cover),
               ),
-              const SizedBox(width: 8,),
+              const SizedBox(
+                width: 8,
+              ),
               Flexible(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      field.name,
-                      maxLines: 1,
-                      style: subTitleTextStyle,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8,),
                     Row(
-                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            field.name,
+                            maxLines: 1,
+                            style: subTitleTextStyle,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.star,
+                                size: 16, color: Colors.amber),
+                            const SizedBox(width: 4),
+                            Text(
+                              field.rating.toStringAsFixed(1),
+                              style: subTitleTextStyle.copyWith(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(
+                      height: 8,
+                    ),
+                    Row(
                       children: [
                         Image.asset(
                           "assets/icons/pin.png",
@@ -62,7 +87,7 @@ class SportFieldList extends StatelessWidget {
                         const SizedBox(
                           width: 8.0,
                         ),
-                        Flexible(
+                        Expanded(
                           child: Text(
                             field.address,
                             maxLines: 1,
@@ -70,6 +95,19 @@ class SportFieldList extends StatelessWidget {
                             style: addressTextStyle,
                           ),
                         ),
+                        if (field.distanceKm != null) ...[
+                          const SizedBox(width: 8),
+                          const Icon(Icons.near_me,
+                              size: 14, color: darkBlue300),
+                          const SizedBox(width: 4),
+                          Text(
+                            "${field.distanceKm!.toStringAsFixed(1)} km",
+                            style: addressTextStyle.copyWith(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],

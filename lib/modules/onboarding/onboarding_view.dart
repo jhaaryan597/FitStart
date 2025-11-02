@@ -1,92 +1,235 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:spod_app/modules/root/root_view.dart';
-import 'package:spod_app/theme.dart';
+import 'package:FitStart/modules/root/root_view.dart';
 
-class OnboardingView extends StatelessWidget {
+class OnboardingView extends StatefulWidget {
+  @override
+  _OnboardingViewState createState() => _OnboardingViewState();
+}
+
+class _OnboardingViewState extends State<OnboardingView> {
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
+  double _dragAccumX = 0; // accumulates horizontal drag on the bottom sheet
+
+  List<Map<String, String>> onboardingData = [
+    {
+      'image': 'assets/images/onb1.jpg',
+      'title': 'Train Anytime, Anywhere',
+      'subtitle':
+          'Visit top-rated gyms, join group classes, or access exclusive zones—whenever it fits your schedule.',
+    },
+    {
+      'image': 'assets/images/onb2.jpg',
+      'title': 'Choose Your FitCard',
+      'subtitle':
+          'Unlock access to hundreds of gyms and fitness services with a single, flexible membership plan.',
+    },
+    {
+      'image': 'assets/images/onb3.jpg',
+      'title': 'Wellness at Your Fingertips',
+      'subtitle':
+          'Book specialists, redeem rewards, and manage your fitness journey—all in one app.',
+    },
+  ];
+
+  Future<void> _completeOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('onboarding_complete', true);
+  }
+
   @override
   Widget build(BuildContext context) {
-    Future.delayed(Duration.zero, () => showWelcomeDialog(context));
+    final screenHeight = MediaQuery.of(context).size.height;
     return Scaffold(
-      backgroundColor: backgroundColor,
-      appBar: AppBar(
-        elevation: 0,
-        toolbarHeight: 0,
-        systemOverlayStyle: const SystemUiOverlayStyle(
-            statusBarColor: backgroundColor,
-            statusBarIconBrightness: Brightness.dark),
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.end,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Image.asset(
-                "assets/images/onboarding_illustration.png",
-                height: 300,
+      body: SizedBox.expand(
+        child: Stack(
+          children: [
+            // Top: 70% height image carousel with overlay
+            SizedBox(
+              height: screenHeight * 0.7,
+              width: double.infinity,
+              child: Stack(
+                children: [
+                  PageView.builder(
+                    controller: _pageController,
+                    onPageChanged: (int page) {
+                      setState(() {
+                        _currentPage = page;
+                      });
+                    },
+                    itemCount: onboardingData.length,
+                    itemBuilder: (context, index) {
+                      return Image.asset(
+                        onboardingData[index]['image']!,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                      );
+                    },
+                  ),
+                  // Dark overlay for readability
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.black.withOpacity(0.3),
+                            Colors.black.withOpacity(0.3),
+                          ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              SizedBox(height: 32,),
-              Text(
-                "Make It Eazy",
-                style: titleTextStyle.copyWith(fontSize: 24,color: darkBlue300),
+            ),
+
+            // Back arrow to go to previous onboarding page
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              child: SafeArea(
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: Visibility(
+                    visible: _currentPage > 0,
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      onPressed: () {
+                        _pageController.previousPage(
+                          duration: const Duration(milliseconds: 400),
+                          curve: Curves.ease,
+                        );
+                      },
+                    ),
+                  ),
+                ),
               ),
-              const SizedBox(
-                height: 8,
+            ),
+
+            // Bottom: 40% height white sheet overlapping the image by 10% of screen height
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragUpdate: (details) {
+                  _dragAccumX += details.delta.dx;
+                },
+                onHorizontalDragEnd: (details) {
+                  if (_dragAccumX < -40 &&
+                      _currentPage < onboardingData.length - 1) {
+                    _pageController.nextPage(
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.ease,
+                    );
+                  } else if (_dragAccumX > 40 && _currentPage > 0) {
+                    _pageController.previousPage(
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.ease,
+                    );
+                  }
+                  _dragAccumX = 0;
+                },
+                child: Container(
+                  height: screenHeight * 0.4,
+                  padding: const EdgeInsets.all(20),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(30),
+                      topRight: Radius.circular(30),
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Image.asset('assets/images/logo.png', height: 50),
+                      const SizedBox(height: 20),
+                      Text(
+                        onboardingData[_currentPage]['title']!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        onboardingData[_currentPage]['subtitle']!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 30),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(onboardingData.length, (index) {
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            margin: const EdgeInsets.symmetric(horizontal: 5),
+                            height: 10,
+                            width: _currentPage == index ? 20 : 10,
+                            decoration: BoxDecoration(
+                              color: _currentPage == index
+                                  ? const Color(0xFF92C848)
+                                  : Colors.grey,
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                          );
+                        }),
+                      ),
+                      const SizedBox(height: 30),
+                      ElevatedButton(
+                        onPressed: () async {
+                          if (_currentPage < onboardingData.length - 1) {
+                            _pageController.nextPage(
+                              duration: const Duration(milliseconds: 500),
+                              curve: Curves.ease,
+                            );
+                          } else {
+                            await _completeOnboarding();
+                            if (!mounted) return;
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    RootView(currentScreen: 0),
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF92C848),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 50, vertical: 15),
+                        ),
+                        child: Text(
+                          _currentPage < onboardingData.length - 1
+                              ? 'Next'
+                              : 'Get Started',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              Text(
-                "Discover and Book Sports Venue from Anywhere at Anytime. Let's get healthy and have fun!",
-                style: descTextStyle,
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            minimumSize: Size(100, 50),
-            shape: RoundedRectangleBorder(
-              borderRadius:
-              BorderRadius.circular(borderRadiusSize))
-          ),
-          onPressed: () async {
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setBool("skipOnBoarding", true);
-            Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) {
-              return RootView(
-                currentScreen: 0,
-              );
-            }));
-          },
-          child: Text(
-            "Explore Now",
-            style: buttonTextStyle,
-          ),
+            ),
+          ],
         ),
       ),
     );
-  }
-
-  showWelcomeDialog(context) {
-    return showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, 'OK'),
-                child: const Text('OK'),
-              ),
-            ],
-            title: const Text("Thank you for downloading Spod."),
-            content: const Text(
-                'Keep in mind this is just a demo App, so the content in this app uses Dummy (Fake) Data and some features are still unimplemented.'),
-          );
-        });
   }
 }
