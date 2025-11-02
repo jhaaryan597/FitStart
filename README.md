@@ -1,27 +1,220 @@
-# FitStart App
+# FitStart 🏃‍♂️
 
-FitStart is an android application which allow user to book a sport venue from anywhere at anytime using mobile phone. This project was created using the Flutter Framework.
+FitStart is a comprehensive Flutter application that allows users to discover, book, and manage sports venues and gym memberships from anywhere at anytime. The app features AI-powered recommendations, real-time notifications, and seamless booking management.
 
+## ✨ Features
 
-<div align="center">
+### 🏠 Core Features
+- **Venue Discovery**: Browse sports fields and gym facilities with detailed information
+- **Smart Search**: Real-time search with optimized performance
+- **AI Recommendations**: Machine learning-powered venue suggestions based on user preferences
+- **Booking Management**: Complete booking workflow with order tracking
+- **Favorites**: Save and manage favorite venues
+- **User Profiles**: Customizable user profiles with image upload
 
+### 🔔 Notification System
+- **Push Notifications**: Firebase Cloud Messaging (V1 API) integration
+- **Notification Inbox**: Persistent notification storage with local caching
+- **Badge Indicators**: Visual indicators for unread notifications
+- **Campaign Notifications**: Admin panel for sending broadcast messages
+- **Multiple States**: Foreground, background, and terminated state handling
 
-[![Downloads](https://PlayBadges.pavi2410.me/badge/downloads?id=com.mikirinkode.spod)](https://play.google.com/store/apps/details?id=com.mikirinkode.spod)
- [![Version](https://img.shields.io/github/v/release/mikirinkode/sports_venue_booking_app?include_prereleases&sort=semver)](https://github.com/mikirinkode/sports_venue_booking_app/releases/latest)
+### 🤖 AI & ML Integration
+- **Gemini AI Chatbot**: Interactive chatbot for venue recommendations and queries
+- **ML Recommendations**: Personalized venue suggestions based on user behavior
+- **Smart Caching**: Intelligent caching system for improved performance
 
+### 💳 Payment Integration
+- **Razorpay**: Secure payment processing for bookings and memberships
+- **Transaction History**: Complete transaction tracking and management
 
-[<img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"
-      alt='Get it on Google Play'
-      height="80">](https://play.google.com/store/apps/details?id=com.mikirinkode.spod)
+### 🎨 User Experience
+- **Modern UI**: Clean, intuitive design with smooth animations
+- **Dark Mode**: Full dark mode support
+- **Responsive Design**: Optimized for various screen sizes
+- **Performance Optimized**: State preservation and intelligent caching
 
-<div align="left">
+## 🛠️ Tech Stack
 
-### Note
-- Some Feature are still unimplemented
-- The app is using a Dummy Data (Fake Data)
-- All images of sports venue in the application are not mine, but I also include the author of each image in the app
+### Frontend
+- **Flutter**: Cross-platform mobile development
+- **Provider**: State management
+- **Hive**: Local storage for caching
 
-### Preview
-<img src="https://raw.githubusercontent.com/mikirinkode/sports_field_booking_app/master/assets/spod_showcase_1.png" alt="Preview 1">
-<br>
-<img src="https://raw.githubusercontent.com/mikirinkode/sports_field_booking_app/master/assets/spod_showcase_2.png" alt="Preview 2">
+### Backend
+- **Supabase**: Backend as a Service (BaaS)
+  - Authentication
+  - PostgreSQL Database
+  - Edge Functions
+  - Storage
+
+### Services & APIs
+- **Firebase Cloud Messaging**: Push notifications (V1 API)
+- **Google Gemini AI**: AI chatbot and recommendations
+- **Razorpay**: Payment processing
+- **Google Maps**: Location services
+
+### Key Packages
+```yaml
+firebase_messaging: ^15.2.10
+flutter_local_notifications: ^17.2.4
+google_generative_ai: ^0.4.3
+supabase_flutter: ^2.9.5
+razorpay_flutter: ^1.3.7
+cached_network_image: ^3.3.1
+shared_preferences: ^2.3.0
+hive: ^2.2.3
+provider: ^6.1.1
+```
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Flutter SDK (3.0.0 or higher)
+- Dart SDK (3.0.0 or higher)
+- Android Studio / VS Code
+- Firebase account
+- Supabase account
+- Razorpay account
+
+### Installation
+
+1. **Clone the repository**
+```bash
+git clone https://github.com/jhaaryan597/FitStart.git
+cd FitStart
+```
+
+2. **Install dependencies**
+```bash
+flutter pub get
+```
+
+3. **Configure Firebase**
+   - Create a Firebase project
+   - Download `google-services.json` and place it in `android/app/`
+   - Enable Firebase Cloud Messaging
+   - Set up service account for V1 API
+
+4. **Configure Supabase**
+   - Create a Supabase project
+   - Update Supabase credentials in the app
+   - Run database migrations from `supabase/migrations/`
+   - Deploy edge functions from `supabase/functions/`
+   - Add required secrets:
+     - `FIREBASE_PROJECT_ID`
+     - `FIREBASE_CLIENT_EMAIL`
+     - `FIREBASE_PRIVATE_KEY`
+
+5. **Configure Gemini AI**
+   - Get API key from Google AI Studio
+   - Add to your environment configuration
+
+6. **Configure Razorpay**
+   - Get API keys from Razorpay dashboard
+   - Update in `lib/utils/razorpay_service.dart`
+
+7. **Run the app**
+```bash
+flutter run
+```
+
+## 📁 Project Structure
+
+```
+lib/
+├── main.dart                      # App entry point
+├── theme.dart                     # App theming
+├── components/                    # Reusable UI components
+│   ├── category_card.dart
+│   ├── gym_card.dart
+│   ├── sport_field_card.dart
+│   └── reusable/                  # Generic reusable widgets
+├── model/                         # Data models
+│   ├── user.dart
+│   ├── sport_field.dart
+│   ├── gym.dart
+│   ├── field_order.dart
+│   └── notification_item.dart
+├── modules/                       # Feature modules
+│   ├── auth/                      # Authentication
+│   ├── home/                      # Home screen
+│   ├── booking/                   # Booking management
+│   ├── notification/              # Notification inbox
+│   ├── profile/                   # User profile
+│   ├── favorites/                 # Favorites management
+│   ├── transaction/               # Transaction history
+│   └── gym/                       # Gym features
+├── services/                      # Business logic services
+│   ├── notification_service.dart  # FCM integration
+│   ├── cache_service.dart         # Caching system
+│   ├── gemini_chatbot_service.dart # AI chatbot
+│   ├── ml_recommendation_service.dart # ML recommendations
+│   └── profile_image_service.dart # Image handling
+├── utils/                         # Utility functions
+│   ├── hive_storage.dart
+│   ├── location_service.dart
+│   ├── razorpay_service.dart
+│   └── theme_manager.dart
+└── viewmodels/                    # View models
+    └── auth_viewmodel.dart
+```
+
+## 🗄️ Database Schema
+
+The app uses Supabase PostgreSQL with the following main tables:
+- `profiles`: User profiles and settings
+- `fcm_tokens`: Firebase Cloud Messaging tokens
+- `favorites`: User's favorite venues
+- `orders`: Booking orders
+- `ml_user_preferences`: ML recommendation data
+- `ml_venue_features`: Venue feature vectors
+- `ml_user_interactions`: User interaction tracking
+
+## 🔐 Security
+
+- Service account authentication for Firebase V1 API
+- Row Level Security (RLS) policies on Supabase
+- Secure token management
+- Environment variables for sensitive data
+
+## 📱 Features in Detail
+
+### Notification System
+- **Topic-based messaging**: Subscribe to `/topics/all` for broadcasts
+- **Local persistence**: Notifications stored in SharedPreferences
+- **Swipe to delete**: Intuitive gesture controls
+- **Mark as read/unread**: Manage notification status
+- **Badge indicators**: Visual cues for new notifications
+
+### Caching System
+- **User data caching**: 60-minute expiry
+- **ML recommendations**: 30-minute expiry
+- **Location caching**: Persistent storage
+- **State preservation**: AutomaticKeepAliveClientMixin
+
+### AI Features
+- **Contextual chatbot**: Venue recommendations and queries
+- **Preference learning**: Adapts to user behavior
+- **Personalized suggestions**: ML-based recommendations
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 👨‍💻 Author
+
+**Aryan Jha**
+- GitHub: [@jhaaryan597](https://github.com/jhaaryan597)
+- Email: jhaaryan597@gmail.com
+
+## 🙏 Acknowledgments
+
+- Flutter team for the amazing framework
+- Supabase for the backend infrastructure
+- Firebase for cloud messaging
+- Google for Gemini AI integration
