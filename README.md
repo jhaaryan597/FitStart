@@ -90,31 +90,27 @@ cd FitStart
 flutter pub get
 ```
 
-3. **Configure Firebase**
-   - Create a Firebase project
-   - Download `google-services.json` and place it in `android/app/`
-   - Enable Firebase Cloud Messaging
-   - Set up service account for V1 API
+3. **Configure Secrets and API Keys**
+   
+   ⚠️ **IMPORTANT**: Never commit API keys to git!
+   
+   See [SECRETS_SETUP.md](SECRETS_SETUP.md) for detailed instructions.
+   
+   Quick setup:
+   - Download `google-services.json` from Firebase Console → place in `android/app/`
+   - Generate Gemini AI API key from Google AI Studio
+   - Configure Supabase Edge Function secrets (Firebase service account)
+   - Set up Razorpay API keys
+   
+   All sensitive files are already in `.gitignore`.
 
 4. **Configure Supabase**
    - Create a Supabase project
    - Update Supabase credentials in the app
    - Run database migrations from `supabase/migrations/`
    - Deploy edge functions from `supabase/functions/`
-   - Add required secrets:
-     - `FIREBASE_PROJECT_ID`
-     - `FIREBASE_CLIENT_EMAIL`
-     - `FIREBASE_PRIVATE_KEY`
 
-5. **Configure Gemini AI**
-   - Get API key from Google AI Studio
-   - Add to your environment configuration
-
-6. **Configure Razorpay**
-   - Get API keys from Razorpay dashboard
-   - Update in `lib/utils/razorpay_service.dart`
-
-7. **Run the app**
+5. **Run the app**
 ```bash
 flutter run
 ```

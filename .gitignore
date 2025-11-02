@@ -44,3 +44,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Sensitive files with API keys - NEVER COMMIT THESE!
+android/app/google-services.json
+test_gemini_models.dart
+test_gemini.dart
+test_api_direct.dart
+.env
+*.env
+!.env.template

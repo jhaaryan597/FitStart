@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "742096622849",
+    "project_id": "fitstart-74084",
+    "storage_bucket": "fitstart-74084.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:742096622849:android:9939982a78a0eb16e67700",
+        "android_client_info": {
+          "package_name": "com.mikirinkode.fitstart"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "YOUR_FIREBASE_API_KEY_HERE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
