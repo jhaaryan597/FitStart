@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:FitStart/services/api_service.dart';
 import 'package:FitStart/modules/auth/auth_view.dart';
 import 'package:FitStart/modules/setting/privacy_policy_view.dart';
 import 'package:FitStart/modules/setting/support_help_view.dart';
 import 'package:FitStart/modules/setting/faq_view.dart';
 import 'package:FitStart/modules/setting/legal_information_view.dart';
-import 'package:FitStart/viewmodels/auth_viewmodel.dart';
+import 'package:FitStart/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:FitStart/features/auth/presentation/bloc/auth_event.dart';
 import 'package:FitStart/theme.dart';
 
-class SettingsView extends ConsumerWidget {
+class SettingsView extends StatelessWidget {
   const SettingsView({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final authViewModel = ref.watch(authViewModelProvider);
+  Widget build(BuildContext context) {
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -114,11 +114,16 @@ class SettingsView extends ConsumerWidget {
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
-                onPressed: authViewModel.isLoading
-                    ? null
-                    : () async {
-                        await authViewModel.signOut(context);
-                      },
+                onPressed: () async {
+                  final authBloc = context.read<AuthBloc>();
+                  authBloc.add(LogoutEvent());
+                  if (context.mounted) {
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (context) => const AuthView()),
+                      (route) => false,
+                    );
+                  }
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   shape: RoundedRectangleBorder(
@@ -126,23 +131,13 @@ class SettingsView extends ConsumerWidget {
                   ),
                   elevation: 0,
                 ),
-                child: authViewModel.isLoading
-                    ? const SizedBox(
-                        height: 24,
-                        width: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : Text(
-                        'Log Out',
-                        style: buttonTextStyle.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                child: Text(
+                  'Log Out',
+                  style: buttonTextStyle.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 40),
@@ -231,18 +226,23 @@ class SettingsView extends ConsumerWidget {
             TextButton(
               onPressed: () async {
                 try {
-                  await Supabase.instance.client.rpc('delete_user_account');
+                  // TODO: Backend endpoint for account deletion needs to be created
+                  // await ApiService.deleteAccount();
 
                   if (!dialogContext.mounted) return;
                   Navigator.of(dialogContext).pop(); // Close the dialog
+
+                  // For now, just logout since backend endpoint not ready
+                  await ApiService.logout();
+
                   Navigator.of(context).pushAndRemoveUntil(
                     MaterialPageRoute(builder: (context) => const AuthView()),
                     (route) => false,
                   );
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Account deleted successfully.'),
-                      backgroundColor: Colors.green,
+                      content: Text('Logged out (account deletion endpoint needed).'),
+                      backgroundColor: Colors.orange,
                     ),
                   );
                 } catch (e) {
@@ -250,7 +250,7 @@ class SettingsView extends ConsumerWidget {
                   Navigator.of(dialogContext).pop();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Failed to delete account: ${e}'),
+                      content: Text('Failed to logout: ${e}'),
                       backgroundColor: Colors.red,
                     ),
                   );

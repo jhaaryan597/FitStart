@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:FitStart/services/api_service.dart';
 import 'package:FitStart/model/sport_field.dart';
 import 'package:FitStart/theme.dart';
 import 'package:FitStart/components/category_card.dart';
@@ -33,7 +33,6 @@ class _HomeViewState extends State<HomeView>
   String? _username;
   String? _profileImageUrl;
   int _unreadNotificationCount = 0;
-  StreamSubscription<AuthState>? _authStateSubscription;
   final ScrollController _scrollController = ScrollController();
   int _currentPage = 1;
   final int _venuesPerPage = 10;
@@ -92,16 +91,6 @@ class _HomeViewState extends State<HomeView>
         _loadMoreVenues();
       }
     });
-
-    _authStateSubscription =
-        Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-      final event = data.event;
-      if (event == AuthChangeEvent.signedIn ||
-          event == AuthChangeEvent.userUpdated) {
-        _fetchUsername();
-        _loadSavedLocation();
-      }
-    });
   }
 
   Future<void> _loadUnreadNotificationCount() async {
@@ -126,16 +115,12 @@ class _HomeViewState extends State<HomeView>
   @override
   void dispose() {
     _slangTimer?.cancel();
-    _authStateSubscription?.cancel();
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _fetchUsername() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-
     // Try to load from cache first
     final cachedData = _cacheService.getCachedUserData();
     if (cachedData != null) {
@@ -151,26 +136,25 @@ class _HomeViewState extends State<HomeView>
 
     // Fetch from server if cache is empty or expired
     try {
-      final data = await Supabase.instance.client
-          .from('profiles')
-          .select('username, profile_image')
-          .eq('id', user.id)
-          .single();
+      final result = await ApiService.getCurrentUser();
+      if (result['success']) {
+        final data = result['data'];
+        final username = (data['username'] as String?) ??
+                        (data['name'] as String?) ?? 'No username';
+        final profileImage = data['profileImage'] as String?;
 
-      final username = (data['username'] as String?) ?? 'No username';
-      final profileImage = data['profile_image'] as String?;
+        // Cache the data
+        await _cacheService.cacheUserData(
+          username: username,
+          profileImage: profileImage,
+        );
 
-      // Cache the data
-      await _cacheService.cacheUserData(
-        username: username,
-        profileImage: profileImage,
-      );
-
-      if (mounted) {
-        setState(() {
-          _username = username;
-          _profileImageUrl = profileImage;
-        });
+        if (mounted) {
+          setState(() {
+            _username = username;
+            _profileImageUrl = profileImage;
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -182,8 +166,6 @@ class _HomeViewState extends State<HomeView>
   }
 
   Future<void> _loadMLRecommendations() async {
-    final user = Supabase.instance.client.auth.currentUser;
-
     // Try to load from cache first
     final cachedRecommendations = _cacheService.getCachedRecommendations();
     if (cachedRecommendations != null && cachedRecommendations.isNotEmpty) {
@@ -212,9 +194,13 @@ class _HomeViewState extends State<HomeView>
     });
 
     try {
+      // Get current user to fetch user ID
+      final result = await ApiService.getCurrentUser();
+      final userId = result['success'] ? result['data']['_id'] as String? : null;
+
       final recommendations =
           await MLRecommendationService.getRecommendedVenues(
-        userId: user?.id,
+        userId: userId,
         limit: 10,
       );
 
@@ -244,9 +230,6 @@ class _HomeViewState extends State<HomeView>
   }
 
   Future<void> _loadSavedLocation() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-
     // Try to load from cache first
     final cachedLocation = _cacheService.getCachedLocation();
     if (cachedLocation != null && cachedLocation.isNotEmpty) {
@@ -255,17 +238,15 @@ class _HomeViewState extends State<HomeView>
     }
 
     try {
-      final data = await Supabase.instance.client
-          .from('profiles')
-          .select('saved_location')
-          .eq('id', user.id)
-          .single();
-
-      final savedLocation = data['saved_location'] as String?;
-      if (savedLocation != null && savedLocation.isNotEmpty) {
-        // Cache the location
-        await _cacheService.cacheSavedLocation(savedLocation);
-        await _getCurrentLocation(address: savedLocation);
+      final result = await ApiService.getCurrentUser();
+      if (result['success']) {
+        final data = result['data'];
+        final savedLocation = data['savedLocation'] as String?;
+        if (savedLocation != null && savedLocation.isNotEmpty) {
+          // Cache the location
+          await _cacheService.cacheSavedLocation(savedLocation);
+          await _getCurrentLocation(address: savedLocation);
+        }
       }
     } catch (e) {
       print('Error loading saved location: $e');
@@ -273,19 +254,13 @@ class _HomeViewState extends State<HomeView>
   }
 
   Future<void> _saveLocationToDatabase(String address) async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-
     try {
       // Cache the location first (instant)
       await _cacheService.cacheSavedLocation(address);
 
-      // Then save to database (slower)
-      await Supabase.instance.client.from('profiles').update({
-        'saved_location': address,
-      }).eq('id', user.id);
-
-      print('Location saved successfully: $address');
+      // Note: Backend endpoint for updating saved location needs to be added
+      // For now, location is cached locally
+      print('Location cached successfully: $address');
     } catch (e) {
       print('Error saving location: $e');
     }

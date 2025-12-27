@@ -1,8 +1,12 @@
 import 'dart:math' as math;
-
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:FitStart/model/sport_field.dart';
 import 'package:FitStart/utils/dummy_data.dart';
+
+// Backend API URL
+const String apiBaseUrl = 'http://localhost:3000/api/v1'; // Change to your server URL
 
 /// On-device kNN-style recommender using cosine similarity over feature vectors.
 /// Features: one-hot category, one-hot facilities, normalized price, rating,
@@ -35,27 +39,45 @@ class KNNRecommenderService {
 
     if (userId != null) {
       try {
-        // Get venues user has booked (from orders table)
-        final ordersResponse = await Supabase.instance.client
-            .from('orders')
-            .select('venue_id')
-            .eq('user_id', userId)
-            .eq('venue_type', 'sports_venue');
+        // Get JWT token from storage
+        final prefs = await SharedPreferences.getInstance();
+        final jwtToken = prefs.getString('jwt_token');
+        
+        if (jwtToken != null) {
+          // Get user bookings from backend API
+          final bookingsResponse = await http.get(
+            Uri.parse('$apiBaseUrl/bookings'),
+            headers: {
+              'Authorization': 'Bearer $jwtToken',
+            },
+          );
 
-        bookedFieldIds =
-            ordersResponse.map((item) => item['venue_id'] as String).toList();
+          if (bookingsResponse.statusCode == 200) {
+            final bookingsData = jsonDecode(bookingsResponse.body);
+            if (bookingsData['success'] == true) {
+              bookedFieldIds = (bookingsData['data'] as List)
+                  .map((booking) => booking['venue'] as String)
+                  .toList();
+            }
+          }
 
-        // Get venues user has interacted with (views, favorites)
-        final interactionsResponse = await Supabase.instance.client
-            .from('user_interactions')
-            .select('venue_id, interaction_score')
-            .eq('user_id', userId)
-            .eq('venue_type', 'sports_venue')
-            .order('interaction_score', ascending: false);
+          // Get user interactions/favorites from backend API
+          final userResponse = await http.get(
+            Uri.parse('$apiBaseUrl/auth/me'),
+            headers: {
+              'Authorization': 'Bearer $jwtToken',
+            },
+          );
 
-        interactedFieldIds = interactionsResponse
-            .map((item) => item['venue_id'] as String)
-            .toList();
+          if (userResponse.statusCode == 200) {
+            final userData = jsonDecode(userResponse.body);
+            if (userData['success'] == true) {
+              interactedFieldIds = List<String>.from(
+                userData['data']['favorites'] ?? []
+              );
+            }
+          }
+        }
       } catch (e) {
         // Handle error, e.g., log it. Fallback to cold start.
         print('ML Error fetching user history: $e');
@@ -96,20 +118,31 @@ class KNNRecommenderService {
     final userProfileVector =
         _createProfileVector(userFields, dict, includeDistance);
 
-    // Step 2: Try to get collaborative filtering recommendations
+    // Step 2: Try to get collaborative filtering recommendations from backend
     Map<String, double> collaborativeScores = {};
     if (userId != null) {
       try {
-        final collabRecs = await Supabase.instance.client
-            .rpc('get_collaborative_recommendations', params: {
-          'target_user_id': userId,
-          'venue_type_filter': 'sports_venue',
-          'limit_count': topN * 2,
-        });
+        final prefs = await SharedPreferences.getInstance();
+        final jwtToken = prefs.getString('jwt_token');
+        
+        if (jwtToken != null) {
+          // Call backend API for ML recommendations (if implemented)
+          final mlResponse = await http.get(
+            Uri.parse('$apiBaseUrl/venues/recommendations'),
+            headers: {
+              'Authorization': 'Bearer $jwtToken',
+            },
+          );
 
-        for (final rec in collabRecs) {
-          collaborativeScores[rec['venue_id'] as String] =
-              (rec['recommendation_score'] as num).toDouble();
+          if (mlResponse.statusCode == 200) {
+            final mlData = jsonDecode(mlResponse.body);
+            if (mlData['success'] == true) {
+              for (final rec in (mlData['data'] as List)) {
+                collaborativeScores[rec['venueId'] as String] =
+                    (rec['score'] as num).toDouble();
+              }
+            }
+          }
         }
       } catch (e) {
         print('Collaborative filtering error: $e');

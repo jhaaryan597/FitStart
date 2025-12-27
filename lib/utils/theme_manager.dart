@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/legacy.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-final themeManagerProvider = ChangeNotifierProvider<ThemeManager>((ref) {
-  return ThemeManager();
-});
-
+// Note: This ThemeManager is kept for backward compatibility
+// Consider migrating to a ThemeBloc in the future
 class ThemeManager with ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.light;
 

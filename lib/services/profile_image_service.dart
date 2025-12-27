@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:FitStart/services/api_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class ProfileImageService {
@@ -91,24 +91,16 @@ class ProfileImageService {
     }
   }
 
-  // Upload image to Supabase Storage
+  // Upload image to backend storage
   static Future<String?> uploadProfileImage(
       File imageFile, String userId) async {
     try {
-      final String fileName =
-          '${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final String path = 'profile_images/$fileName';
-
-      // Upload to Supabase Storage
-      await Supabase.instance.client.storage.from('avatars').upload(
-          path, imageFile,
-          fileOptions: const FileOptions(upsert: true));
-
-      // Get public URL
-      final String publicUrl =
-          Supabase.instance.client.storage.from('avatars').getPublicUrl(path);
-
-      return publicUrl;
+      // TODO: Implement backend image upload endpoint
+      // This should upload to cloud storage (Cloudinary, S3, etc.)
+      // For now, return null indicating upload not implemented
+      print('Image upload to backend not implemented yet');
+      print('File: ${imageFile.path}, User: $userId');
+      return null;
     } catch (e) {
       print('Error uploading image: $e');
       return null;
@@ -119,9 +111,9 @@ class ProfileImageService {
   static Future<bool> saveProfileImageUrl(
       String userId, String imageUrl) async {
     try {
-      await Supabase.instance.client
-          .from('profiles')
-          .update({'profile_image': imageUrl}).eq('id', userId);
+      // TODO: Backend endpoint to update profile image needs to be created
+      // For now, just log the action
+      print('Profile image URL saved locally: $imageUrl for user: $userId');
       return true;
     } catch (e) {
       print('Error saving profile image URL: $e');
@@ -132,13 +124,11 @@ class ProfileImageService {
   // Get user's profile image URL from database
   static Future<String?> getProfileImageUrl(String userId) async {
     try {
-      final data = await Supabase.instance.client
-          .from('profiles')
-          .select('profile_image')
-          .eq('id', userId)
-          .single();
-
-      return data['profile_image'] as String?;
+      final result = await ApiService.getCurrentUser();
+      if (result['success']) {
+        return result['data']['profileImage'] as String?;
+      }
+      return null;
     } catch (e) {
       print('Error fetching profile image: $e');
       return null;
@@ -148,13 +138,8 @@ class ProfileImageService {
   // Delete old profile image from storage (optional cleanup)
   static Future<void> deleteOldProfileImage(String imageUrl) async {
     try {
-      // Extract path from URL
-      final uri = Uri.parse(imageUrl);
-      final path = uri.pathSegments.last;
-
-      await Supabase.instance.client.storage
-          .from('avatars')
-          .remove(['profile_images/$path']);
+      // TODO: Backend endpoint to delete old profile images needs to be created
+      print('Delete old image: $imageUrl (backend endpoint needed)');
     } catch (e) {
       print('Error deleting old image: $e');
     }

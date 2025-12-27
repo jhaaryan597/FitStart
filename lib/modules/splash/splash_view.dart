@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:FitStart/services/api_service.dart';
 import 'package:FitStart/modules/auth/auth_view.dart';
 import 'package:FitStart/modules/onboarding/onboarding_view.dart';
 import 'package:FitStart/modules/root/root_view.dart';
@@ -42,9 +42,9 @@ class _SplashViewState extends State<SplashView>
 
     final prefs = await SharedPreferences.getInstance();
     final onboardingComplete = prefs.getBool('onboarding_complete') ?? false;
-    final session = Supabase.instance.client.auth.currentSession;
+    final jwtToken = prefs.getString('jwt_token');
 
-    if (session != null) {
+    if (jwtToken != null) {
       // User is logged in.
       // If they also completed onboarding, go to home.
       // Otherwise, this case shouldn't happen, but we send to home as a fallback.

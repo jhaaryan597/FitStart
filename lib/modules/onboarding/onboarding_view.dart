@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:FitStart/modules/root/root_view.dart';
+import 'package:FitStart/modules/auth/auth_view.dart';
 
 class OnboardingView extends StatefulWidget {
   @override
@@ -137,8 +137,11 @@ class _OnboardingViewState extends State<OnboardingView> {
                   _dragAccumX = 0;
                 },
                 child: Container(
-                  height: screenHeight * 0.4,
-                  padding: const EdgeInsets.all(20),
+                  constraints: BoxConstraints(
+                    minHeight: screenHeight * 0.35,
+                    maxHeight: screenHeight * 0.45,
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                   decoration: const BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.only(
@@ -146,83 +149,91 @@ class _OnboardingViewState extends State<OnboardingView> {
                       topRight: Radius.circular(30),
                     ),
                   ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Image.asset('assets/images/logo.png', height: 50),
-                      const SizedBox(height: 20),
-                      Text(
-                        onboardingData[_currentPage]['title']!,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        onboardingData[_currentPage]['subtitle']!,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 30),
-                      Row(
+                  child: SafeArea(
+                    top: false,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(onboardingData.length, (index) {
-                          return AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            margin: const EdgeInsets.symmetric(horizontal: 5),
-                            height: 10,
-                            width: _currentPage == index ? 20 : 10,
-                            decoration: BoxDecoration(
-                              color: _currentPage == index
-                                  ? const Color(0xFF92C848)
-                                  : Colors.grey,
-                              borderRadius: BorderRadius.circular(5),
+                        children: [
+                          Image.asset('assets/images/logo.png', height: 50),
+                          const SizedBox(height: 20),
+                          Text(
+                            onboardingData[_currentPage]['title']!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
                             ),
-                          );
-                        }),
-                      ),
-                      const SizedBox(height: 30),
-                      ElevatedButton(
-                        onPressed: () async {
-                          if (_currentPage < onboardingData.length - 1) {
-                            _pageController.nextPage(
-                              duration: const Duration(milliseconds: 500),
-                              curve: Curves.ease,
-                            );
-                          } else {
-                            await _completeOnboarding();
-                            if (!mounted) return;
-                            Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    RootView(currentScreen: 0),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            onboardingData[_currentPage]['subtitle']!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 30),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: List.generate(onboardingData.length, (index) {
+                              return AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                margin: const EdgeInsets.symmetric(horizontal: 5),
+                                height: 10,
+                                width: _currentPage == index ? 20 : 10,
+                                decoration: BoxDecoration(
+                                  color: _currentPage == index
+                                      ? const Color(0xFF92C848)
+                                      : Colors.grey,
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                              );
+                            }),
+                          ),
+                          const SizedBox(height: 30),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                if (_currentPage < onboardingData.length - 1) {
+                                  _pageController.nextPage(
+                                    duration: const Duration(milliseconds: 500),
+                                    curve: Curves.ease,
+                                  );
+                                } else {
+                                  await _completeOnboarding();
+                                  if (!mounted) return;
+                                  Navigator.of(context).pushReplacement(
+                                    MaterialPageRoute(
+                                      builder: (context) => const AuthView(),
+                                    ),
+                                  );
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF92C848),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 15),
+                                minimumSize: const Size(double.infinity, 50),
                               ),
-                            );
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF92C848),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
+                              child: Text(
+                                _currentPage < onboardingData.length - 1
+                                    ? 'Next'
+                                    : 'Get Started',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
                           ),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 50, vertical: 15),
-                        ),
-                        child: Text(
-                          _currentPage < onboardingData.length - 1
-                              ? 'Next'
-                              : 'Get Started',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            color: Colors.white,
-                          ),
-                        ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),

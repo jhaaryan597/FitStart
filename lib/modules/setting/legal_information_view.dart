@@ -104,7 +104,8 @@ class LegalInformationView extends StatelessWidget {
               icon: Icons.people,
               title: 'Third-Party Services',
               content: 'FitStart integrates with third-party services:\n\n'
-                  '• Supabase (database and authentication)\n'
+                  '• MongoDB (database)\n'
+                  '• Node.js/Express (backend API)\n'
                   '• Razorpay (payment processing)\n'
                   '• Google Maps (location services)\n'
                   '• Unsplash (venue images)\n\n'

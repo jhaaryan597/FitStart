@@ -1,28 +1,82 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:FitStart/viewmodels/auth_viewmodel.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:FitStart/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:FitStart/features/auth/presentation/bloc/auth_event.dart';
+import 'package:FitStart/features/auth/presentation/bloc/auth_state.dart';
+import 'package:FitStart/modules/root/root_view.dart';
 import 'package:FitStart/theme.dart';
 
-class SignupView extends ConsumerWidget {
+class SignupView extends StatefulWidget {
   final VoidCallback onToggleView;
 
   const SignupView({Key? key, required this.onToggleView}) : super(key: key);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final emailController = TextEditingController();
-    final passwordController = TextEditingController();
-    final usernameController = TextEditingController();
-    final confirmPasswordController = TextEditingController();
-    final authViewModel = ref.watch(authViewModelProvider);
+  State<SignupView> createState() => _SignupViewState();
+}
 
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      body: Builder(
-        builder: (context) {
-          final screenHeight = MediaQuery.of(context).size.height;
-          return Column(
-            children: [
+class _SignupViewState extends State<SignupView> {
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+  final usernameController = TextEditingController();
+  final confirmPasswordController = TextEditingController();
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    usernameController.dispose();
+    confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  void _handleSignup() {
+    if (passwordController.text != confirmPasswordController.text) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Passwords do not match'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    context.read<AuthBloc>().add(
+      RegisterEvent(
+        username: usernameController.text.trim(),
+        email: emailController.text.trim(),
+        password: passwordController.text,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is Authenticated || state is AuthSuccess) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => RootView(currentScreen: 0),
+            ),
+          );
+        } else if (state is AuthError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.message),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      },
+      child: Scaffold(
+        backgroundColor: backgroundColor,
+        body: BlocBuilder<AuthBloc, AuthState>(
+          builder: (context, state) {
+            final isLoading = state is AuthLoading;
+            final screenHeight = MediaQuery.of(context).size.height;
+            return Column(
+              children: [
               SizedBox(
                 // Use a 50/50 split like Login for consistency
                 height: screenHeight * 0.5,
@@ -101,6 +155,9 @@ class SignupView extends ConsumerWidget {
                       ),
                     ),
                     child: SingleChildScrollView(
+                      padding: EdgeInsets.only(
+                        bottom: MediaQuery.of(context).viewInsets.bottom,
+                      ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -151,36 +208,32 @@ class SignupView extends ConsumerWidget {
                           ),
                           const SizedBox(height: 20),
                           const SizedBox(height: 30),
-                          authViewModel.isLoading
+                          isLoading
                               ? const CircularProgressIndicator()
-                              : ElevatedButton(
-                                  onPressed: () {
-                                    authViewModel.signUp(
-                                      context,
-                                      emailController.text.trim(),
-                                      passwordController.text.trim(),
-                                      usernameController.text.trim(),
-                                    );
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF92C848),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(30),
+                              : SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    onPressed: _handleSignup,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF92C848),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(30),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(vertical: 15),
+                                      minimumSize: const Size(double.infinity, 50),
                                     ),
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 100, vertical: 15),
-                                  ),
-                                  child: const Text(
-                                    'Create Account',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      color: Colors.white,
+                                    child: const Text(
+                                      'Create Account',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        color: Colors.white,
+                                      ),
                                     ),
                                   ),
                                 ),
                           const SizedBox(height: 20),
                           TextButton(
-                            onPressed: onToggleView,
+                            onPressed: widget.onToggleView,
                             child: const Text('Already have an account? Login'),
                           ),
                         ],
@@ -193,6 +246,7 @@ class SignupView extends ConsumerWidget {
           );
         },
       ),
-    );
-  }
+    ),
+  );
+}
 }

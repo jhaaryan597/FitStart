@@ -1,34 +1,24 @@
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
-class HiveStorage extends LocalStorage {
-  HiveStorage() : super();
+/// HiveStorage for local persistence
+///
+/// Note: This was previously used for Supabase session storage
+/// Now using SharedPreferences for JWT token storage instead
+class HiveStorage {
+  final String key = 'jwt_auth_storage';
 
-  @override
-  Future<void> initialize() async {
-    await Hive.initFlutter();
-    await Hive.openBox('supabase_authentication');
+  Future<void> setItem(String key, String value) async {
+    final box = await Hive.openBox('fitstart_auth');
+    await box.put(key, value);
   }
 
-  @override
-  Future<bool> hasAccessToken() async {
-    return Hive.box('supabase_authentication')
-        .containsKey(supabasePersistSessionKey);
+  Future<String?> getItem(String key) async {
+    final box = await Hive.openBox('fitstart_auth');
+    return box.get(key) as String?;
   }
 
-  @override
-  Future<String?> accessToken() async {
-    return Hive.box('supabase_authentication').get(supabasePersistSessionKey);
-  }
-
-  @override
-  Future<void> removePersistedSession() async {
-    await Hive.box('supabase_authentication').delete(supabasePersistSessionKey);
-  }
-
-  @override
-  Future<void> persistSession(String session) async {
-    await Hive.box('supabase_authentication')
-        .put(supabasePersistSessionKey, session);
+  Future<void> removeItem(String key) async {
+    final box = await Hive.openBox('fitstart_auth');
+    await box.delete(key);
   }
 }

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:FitStart/services/api_service.dart';
 import 'package:intl/intl.dart';
 import 'package:FitStart/theme.dart';
 import 'package:FitStart/components/no_transaction_message.dart';
@@ -26,24 +26,23 @@ class _TabHistoryViewState extends State<TabHistoryView> {
     setState(() => _isLoading = true);
 
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) {
+      final result = await ApiService.getBookings();
+      
+      if (result['success'] == true) {
+        // Filter for paid/completed bookings
+        final allBookings = List<Map<String, dynamic>>.from(result['data'] ?? []);
+        final paidBookings = allBookings.where((booking) => 
+          booking['status'] == 'confirmed' || 
+          booking['paymentStatus'] == 'paid'
+        ).toList();
+        
+        setState(() {
+          _history = paidBookings;
+          _isLoading = false;
+        });
+      } else {
         setState(() => _isLoading = false);
-        return;
       }
-
-      // Get orders with paid status
-      final response = await Supabase.instance.client
-          .from('orders')
-          .select()
-          .eq('user_id', user.id)
-          .eq('payment_status', 'paid')
-          .order('created_at', ascending: false);
-
-      setState(() {
-        _history = List<Map<String, dynamic>>.from(response);
-        _isLoading = false;
-      });
     } catch (e) {
       print('Error loading history: $e');
       setState(() => _isLoading = false);

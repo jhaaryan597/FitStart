@@ -4,7 +4,7 @@ import 'package:FitStart/services/ml/knn_recommender.dart';
 import 'package:FitStart/services/ml/interaction_tracker.dart';
 import 'package:FitStart/utils/dummy_data.dart';
 import 'package:FitStart/utils/gym_data.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:FitStart/services/api_service.dart';
 
 /// Machine Learning Recommendation Service
 ///
@@ -14,11 +14,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// 3. Content-Based Filtering using feature vectors
 /// 4. Hybrid approach combining all methods
 ///
-/// The ML models learn from user interactions stored in Supabase
+/// The ML models learn from user interactions stored in the backend
 /// and provide personalized recommendations without requiring
 /// pre-trained models or external datasets.
 class MLRecommendationService {
-  static final _supabase = Supabase.instance.client;
 
   /// Get ML-powered personalized venue recommendations
   ///
@@ -71,7 +70,6 @@ class MLRecommendationService {
       final collabRecs =
           await InteractionTracker.getCollaborativeRecommendations(
         userId: userId,
-        venueType: 'gym',
         limit: limit * 2,
       );
 
@@ -128,9 +126,9 @@ class MLRecommendationService {
   /// Get trending venues based on recent interactions
   static Future<List<SportField>> getTrendingVenues({int limit = 10}) async {
     try {
+      final venueIds = sportFieldList.map((v) => v.id.toString()).toList();
       final popularity = await InteractionTracker.getVenuePopularity(
-        venueType: 'sports_venue',
-        limit: limit,
+        venueIds: venueIds,
       );
 
       final trendingVenues = sportFieldList
@@ -158,7 +156,6 @@ class MLRecommendationService {
       final recommendations =
           await InteractionTracker.getCollaborativeRecommendations(
         userId: userId,
-        venueType: 'sports_venue',
         limit: limit,
       );
 
@@ -187,74 +184,104 @@ class MLRecommendationService {
 
   /// Track user viewing a venue (for ML learning)
   static Future<void> trackVenueView(String venueId) async {
-    final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    try {
+      final result = await ApiService.getCurrentUser();
+      if (!result['success']) return;
 
-    await InteractionTracker.trackView(
-      userId: userId,
-      venueId: venueId,
-      venueType: 'sports_venue',
-    );
+      final userId = result['data']['_id'] as String;
+      await InteractionTracker.trackView(
+        userId: userId,
+        venueId: venueId,
+        venueType: 'sports_venue',
+      );
+    } catch (e) {
+      // Silently fail - tracking shouldn't block app
+    }
   }
 
   /// Track user viewing a gym (for ML learning)
   static Future<void> trackGymView(String gymId) async {
-    final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    try {
+      final result = await ApiService.getCurrentUser();
+      if (!result['success']) return;
 
-    await InteractionTracker.trackView(
-      userId: userId,
-      venueId: gymId,
-      venueType: 'gym',
-    );
+      final userId = result['data']['_id'] as String;
+      await InteractionTracker.trackView(
+        userId: userId,
+        venueId: gymId,
+        venueType: 'gym',
+      );
+    } catch (e) {
+      // Silently fail - tracking shouldn't block app
+    }
   }
 
   /// Track user booking a venue (for ML learning)
   static Future<void> trackVenueBooking(String venueId) async {
-    final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    try {
+      final result = await ApiService.getCurrentUser();
+      if (!result['success']) return;
 
-    await InteractionTracker.trackBooking(
-      userId: userId,
-      venueId: venueId,
-      venueType: 'sports_venue',
-    );
+      final userId = result['data']['_id'] as String;
+      await InteractionTracker.trackBooking(
+        userId: userId,
+        venueId: venueId,
+        venueType: 'sports_venue',
+      );
+    } catch (e) {
+      // Silently fail - tracking shouldn't block app
+    }
   }
 
   /// Track user getting gym membership (for ML learning)
   static Future<void> trackGymMembership(String gymId) async {
-    final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    try {
+      final result = await ApiService.getCurrentUser();
+      if (!result['success']) return;
 
-    await InteractionTracker.trackBooking(
-      userId: userId,
-      venueId: gymId,
-      venueType: 'gym',
-    );
+      final userId = result['data']['_id'] as String;
+      await InteractionTracker.trackBooking(
+        userId: userId,
+        venueId: gymId,
+        venueType: 'gym',
+      );
+    } catch (e) {
+      // Silently fail - tracking shouldn't block app
+    }
   }
 
   /// Track favorite action (for ML learning)
   static Future<void> trackFavorite(String venueId, String venueType) async {
-    final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    try {
+      final result = await ApiService.getCurrentUser();
+      if (!result['success']) return;
 
-    await InteractionTracker.trackFavorite(
-      userId: userId,
-      venueId: venueId,
-      venueType: venueType,
-    );
+      final userId = result['data']['_id'] as String;
+      await InteractionTracker.trackFavorite(
+        userId: userId,
+        venueId: venueId,
+        venueType: venueType,
+      );
+    } catch (e) {
+      // Silently fail - tracking shouldn't block app
+    }
   }
 
   /// Track unfavorite action (for ML learning)
   static Future<void> trackUnfavorite(String venueId, String venueType) async {
-    final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    try {
+      final result = await ApiService.getCurrentUser();
+      if (!result['success']) return;
 
-    await InteractionTracker.trackUnfavorite(
-      userId: userId,
-      venueId: venueId,
-      venueType: venueType,
-    );
+      final userId = result['data']['_id'] as String;
+      await InteractionTracker.trackUnfavorite(
+        userId: userId,
+        venueId: venueId,
+        venueType: venueType,
+      );
+    } catch (e) {
+      // Silently fail - tracking shouldn't block app
+    }
   }
 
   /// Get ML insights about user preferences

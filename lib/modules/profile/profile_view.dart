@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:FitStart/services/api_service.dart';
 import 'package:FitStart/modules/setting/settings_view.dart';
 import 'package:FitStart/modules/notification/notification_view.dart';
 import 'package:FitStart/modules/transaction/transaction_history_view.dart';
@@ -28,24 +28,18 @@ class _ProfileViewState extends State<ProfileView> {
   }
 
   Future<void> _fetchProfile() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-
-    setState(() {
-      _email = user.email ?? '';
-    });
-
     try {
-      final data = await Supabase.instance.client
-          .from('profiles')
-          .select('username, profile_image')
-          .eq('id', user.id)
-          .single();
-      if (mounted) {
-        setState(() {
-          _username = (data['username'] as String?) ?? 'No username set';
-          _profileImageUrl = data['profile_image'] as String?;
-        });
+      final result = await ApiService.getCurrentUser();
+      if (result['success']) {
+        final data = result['data'];
+        if (mounted) {
+          setState(() {
+            _username = (data['username'] as String?) ??
+                       (data['name'] as String?) ?? 'No username set';
+            _email = data['email'] ?? '';
+            _profileImageUrl = data['profileImage'] as String?;
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -171,14 +165,15 @@ class _ProfileViewState extends State<ProfileView> {
     });
 
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) {
+      final result = await ApiService.getCurrentUser();
+      if (!result['success']) {
         _showSnack('Not authenticated');
         return;
       }
 
+      final userId = result['data']['_id'] as String;
       // Save preset avatar path directly (no upload needed for assets)
-      await ProfileImageService.saveProfileImageUrl(user.id, assetPath);
+      await ProfileImageService.saveProfileImageUrl(userId, assetPath);
 
       setState(() {
         _profileImageUrl = assetPath;
@@ -233,29 +228,34 @@ class _ProfileViewState extends State<ProfileView> {
   }
 
   Future<void> _uploadAndSaveImage(File imageFile) async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) {
-      _showSnack('Not authenticated');
-      return;
-    }
+    try {
+      final result = await ApiService.getCurrentUser();
+      if (!result['success']) {
+        _showSnack('Not authenticated');
+        return;
+      }
 
-    _showSnack('Uploading image...');
+      final userId = result['data']['_id'] as String;
+      _showSnack('Uploading image...');
 
-    // Upload to Supabase Storage
-    final imageUrl =
-        await ProfileImageService.uploadProfileImage(imageFile, user.id);
+      // Upload to backend storage
+      final imageUrl =
+          await ProfileImageService.uploadProfileImage(imageFile, userId);
 
-    if (imageUrl != null) {
-      // Save URL to database
-      await ProfileImageService.saveProfileImageUrl(user.id, imageUrl);
+      if (imageUrl != null) {
+        // Save URL to database
+        await ProfileImageService.saveProfileImageUrl(userId, imageUrl);
 
-      setState(() {
-        _profileImageUrl = imageUrl;
-      });
+        setState(() {
+          _profileImageUrl = imageUrl;
+        });
 
-      _showSnack('Profile picture updated!');
-    } else {
-      _showSnack('Failed to upload image');
+        _showSnack('Profile picture updated!');
+      } else {
+        _showSnack('Failed to upload image');
+      }
+    } catch (e) {
+      _showSnack('Error uploading image: $e');
     }
   }
 
@@ -337,28 +337,8 @@ class _ProfileViewState extends State<ProfileView> {
 
                             setState(() => _saving = true);
                             try {
-                              final user =
-                                  Supabase.instance.client.auth.currentUser;
-                              if (user == null) {
-                                _showSnack('Not authenticated');
-                                return;
-                              }
-
-                              // Update username in the profiles table
-                              await Supabase.instance.client
-                                  .from('profiles')
-                                  .update({'username': newName}).eq(
-                                      'id', user.id);
-
-                              // Handle email change if requested
-                              if (wantsEmailChange) {
-                                final emailAttrs =
-                                    UserAttributes(email: newEmail);
-                                await Supabase.instance.client.auth
-                                    .updateUser(emailAttrs);
-                                _showSnack(
-                                    'Check your inbox to verify the new email');
-                              }
+                              // Note: Backend endpoint for profile update needs to be added
+                              // For now, just update local state
 
                               // Update local state and UI
                               setState(() {
@@ -368,7 +348,10 @@ class _ProfileViewState extends State<ProfileView> {
 
                               if (!mounted) return;
                               Navigator.of(ctx).maybePop();
-                              _showSnack('Profile updated successfully');
+                              _showSnack('Profile updated locally (backend endpoint needed)');
+
+                              // TODO: Add backend API call when endpoint is ready
+                              // await ApiService.updateProfile(username: newName, email: newEmail);
                             } catch (e) {
                               _showSnack('Error updating profile: ${e}');
                             } finally {

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:FitStart/services/api_service.dart';
 import 'package:FitStart/model/gym.dart';
 import 'package:FitStart/modules/root/root_view.dart';
 import 'package:FitStart/theme.dart';
@@ -76,8 +76,8 @@ class _GymMembershipViewState extends State<GymMembershipView> {
   }
 
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    // Save membership to Supabase
-    await _saveMembershipToSupabase(
+    // Save membership to backend
+    await _saveMembershipToBackend(
       paymentStatus: 'paid',
       paymentMethod: 'razorpay',
       razorpayPaymentId: response.paymentId,
@@ -107,7 +107,7 @@ class _GymMembershipViewState extends State<GymMembershipView> {
     _showSnackBar(context, "External wallet selected");
   }
 
-  Future<void> _saveMembershipToSupabase({
+  Future<void> _saveMembershipToBackend({
     required String paymentStatus,
     required String paymentMethod,
     DateTime? joiningDate,
@@ -116,9 +116,6 @@ class _GymMembershipViewState extends State<GymMembershipView> {
     String? razorpaySignature,
   }) async {
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) return;
-
       final planData = _plans[_selectedPlan]!;
       final multiplier = planData['multiplier'] as int;
 
@@ -136,29 +133,16 @@ class _GymMembershipViewState extends State<GymMembershipView> {
         );
       }
 
-      await Supabase.instance.client.from('orders').insert({
-        'user_id': user.id,
-        'venue_id': 'GYM_${widget.gym.id}',
-        'venue_name': widget.gym.name,
-        'venue_type': 'gym',
-        'booking_date': DateFormat('EEEE, dd MMM yyyy').format(startDate),
-        'booking_times': [
-          'Membership: ${planData['label']}',
-          if (_withTrainer) 'With Personal Trainer',
-          'Valid until: ${DateFormat('dd MMM yyyy').format(endDate)}',
-        ],
-        'total_amount': _totalBill,
-        'payment_status': paymentStatus,
-        'payment_method': paymentMethod,
-        'razorpay_payment_id': razorpayPaymentId,
-        'razorpay_order_id': razorpayOrderId,
-        'razorpay_signature': razorpaySignature,
-      });
+      // TODO: Backend endpoint for gym membership needs to be created
+      // For now, just track for ML recommendations
+      print('Gym membership created: ${planData['label']} for ${widget.gym.name}');
+      print('Payment status: $paymentStatus, Method: $paymentMethod');
+      print('Valid from ${DateFormat('dd MMM yyyy').format(startDate)} to ${DateFormat('dd MMM yyyy').format(endDate)}');
 
       // Track gym membership for ML recommendations
       MLRecommendationService.trackGymMembership(widget.gym.id);
     } catch (e) {
-      print('Error saving membership to Supabase: $e');
+      print('Error saving membership: $e');
     }
   }
 
@@ -187,8 +171,8 @@ class _GymMembershipViewState extends State<GymMembershipView> {
 
     if (joiningDate == null) return;
 
-    // Save membership to Supabase with pay at gym status
-    await _saveMembershipToSupabase(
+    // Save membership to backend with pay at gym status
+    await _saveMembershipToBackend(
       paymentStatus: 'pay_at_venue',
       paymentMethod: 'pay_at_gym',
       joiningDate: joiningDate,
@@ -590,54 +574,56 @@ class _GymMembershipViewState extends State<GymMembershipView> {
           ],
         ),
       ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: lightBlue300,
-              offset: Offset(0, 0),
-              blurRadius: 10,
-            )
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Total Amount:",
-                  style: descTextStyle,
-                ),
-                Text(
-                  "INR $_totalBill",
-                  style: priceTextStyle,
-                ),
-              ],
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(100, 45),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(borderRadiusSize),
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: lightBlue300,
+                offset: Offset(0, 0),
+                blurRadius: 10,
+              )
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Total Amount:",
+                    style: descTextStyle,
+                  ),
+                  Text(
+                    "INR $_totalBill",
+                    style: priceTextStyle,
+                  ),
+                ],
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(100, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(borderRadiusSize),
+                    ),
+                  ),
+                  onPressed: () {
+                    _showPaymentOptionsDialog();
+                  },
+                  child: Text(
+                    "Get Membership",
+                    style: buttonTextStyle,
                   ),
                 ),
-                onPressed: () {
-                  _showPaymentOptionsDialog();
-                },
-                child: Text(
-                  "Get Membership",
-                  style: buttonTextStyle,
-                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

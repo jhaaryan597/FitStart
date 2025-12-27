@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:FitStart/services/api_service.dart';
 import 'package:intl/intl.dart';
 import 'package:FitStart/theme.dart';
 import 'package:FitStart/components/no_transaction_message.dart';
@@ -26,22 +26,16 @@ class _OrderViewState extends State<OrderView> {
     setState(() => _isLoading = true);
 
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) {
+      final result = await ApiService.getBookings();
+      
+      if (result['success'] == true) {
+        setState(() {
+          _orders = List<Map<String, dynamic>>.from(result['data'] ?? []);
+          _isLoading = false;
+        });
+      } else {
         setState(() => _isLoading = false);
-        return;
       }
-
-      final response = await Supabase.instance.client
-          .from('orders')
-          .select()
-          .eq('user_id', user.id)
-          .order('created_at', ascending: false);
-
-      setState(() {
-        _orders = List<Map<String, dynamic>>.from(response);
-        _isLoading = false;
-      });
     } catch (e) {
       print('Error loading orders: $e');
       setState(() => _isLoading = false);

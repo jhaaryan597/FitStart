@@ -1,13 +1,16 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:FitStart/model/notification_item.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:FitStart/modules/notification/notification_view.dart';
 import 'package:FitStart/main.dart';
+
+// Backend API URL
+const String apiBaseUrl = 'http://localhost:3000/api/v1'; // Change to your server URL
 
 // Top-level function for background message handling
 @pragma('vm:entry-point')
@@ -201,8 +204,8 @@ class NotificationService {
       print('═══════════════════════════════════════');
     }
 
-    // Save FCM token to Supabase profile (optional - for sending targeted notifications)
-    await _saveFCMTokenToProfile();
+    // Save FCM token to backend API
+    await _saveFCMTokenToBackend();
 
     // Subscribe to topics
     await _firebaseMessaging.subscribeToTopic("all");
@@ -216,7 +219,7 @@ class NotificationService {
       if (kDebugMode) {
         print('FCM Token refreshed: $newToken');
       }
-      _saveFCMTokenToProfile();
+      _saveFCMTokenToBackend();
     });
 
     // Set up background message handler
@@ -267,17 +270,38 @@ class NotificationService {
     }
   }
 
-  /// Save FCM token to user's Supabase profile
-  Future<void> _saveFCMTokenToProfile() async {
+  /// Save FCM token to backend API
+  Future<void> _saveFCMTokenToBackend() async {
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user != null && _fcmToken != null) {
-        await Supabase.instance.client
-            .from('profiles')
-            .update({'fcm_token': _fcmToken}).eq('id', user.id);
+      if (_fcmToken == null) return;
 
+      // Get JWT token from storage
+      final prefs = await SharedPreferences.getInstance();
+      final jwtToken = prefs.getString('jwt_token');
+
+      if (jwtToken == null) {
         if (kDebugMode) {
-          print('✅ FCM token saved to profile');
+          print('⚠️ No JWT token found, skipping FCM token save');
+        }
+        return;
+      }
+
+      final response = await http.post(
+        Uri.parse('$apiBaseUrl/auth/fcm-token'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $jwtToken',
+        },
+        body: jsonEncode({'fcmToken': _fcmToken}),
+      );
+
+      if (response.statusCode == 200) {
+        if (kDebugMode) {
+          print('✅ FCM token saved to backend');
+        }
+      } else {
+        if (kDebugMode) {
+          print('❌ Failed to save FCM token: ${response.body}');
         }
       }
     } catch (e) {
@@ -336,29 +360,49 @@ class NotificationService {
     }
   }
 
-  /// Send notification to all users via Supabase Edge Function
+  /// Send notification to all users via backend API
   static Future<bool> sendNotificationToAllUsers({
     required String title,
     required String body,
     Map<String, dynamic>? data,
   }) async {
     try {
-      final response = await Supabase.instance.client.functions.invoke(
-        'send-campaign-notification',
-        body: {
+      // Get JWT token from storage
+      final prefs = await SharedPreferences.getInstance();
+      final jwtToken = prefs.getString('jwt_token');
+      
+      if (jwtToken == null) {
+        if (kDebugMode) {
+          print('⚠️ No JWT token found, cannot send notification');
+        }
+        return false;
+      }
+
+      final response = await http.post(
+        Uri.parse('$apiBaseUrl/notifications/send-all'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $jwtToken',
+        },
+        body: jsonEncode({
           'title': title,
           'body': body,
           'data': data ?? {},
-          'target_type': 'all',
-        },
+        }),
       );
 
-      if (kDebugMode) {
-        print('✅ Notification sent to all users');
-        print('Response: ${response.data}');
+      if (response.statusCode == 200) {
+        if (kDebugMode) {
+          print('✅ Notification sent to all users');
+          print('Response: ${response.body}');
+        }
+        return true;
+      } else {
+        if (kDebugMode) {
+          print('❌ Failed to send notification: ${response.body}');
+        }
+        return false;
       }
-
-      return response.data['success'] == true;
     } catch (e) {
       if (kDebugMode) {
         print('❌ Error sending notification: $e');
@@ -367,7 +411,7 @@ class NotificationService {
     }
   }
 
-  /// Send notification to specific users via Supabase Edge Function
+  /// Send notification to specific users via backend API
   static Future<bool> sendNotificationToUsers({
     required List<String> userIds,
     required String title,
@@ -375,23 +419,43 @@ class NotificationService {
     Map<String, dynamic>? data,
   }) async {
     try {
-      final response = await Supabase.instance.client.functions.invoke(
-        'send-campaign-notification',
-        body: {
+      // Get JWT token from storage
+      final prefs = await SharedPreferences.getInstance();
+      final jwtToken = prefs.getString('jwt_token');
+
+      if (jwtToken == null) {
+        if (kDebugMode) {
+          print('⚠️ No JWT token found, cannot send notification');
+        }
+        return false;
+      }
+
+      final response = await http.post(
+        Uri.parse('$apiBaseUrl/notifications/send-specific'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $jwtToken',
+        },
+        body: jsonEncode({
+          'userIds': userIds,
           'title': title,
           'body': body,
           'data': data ?? {},
-          'target_type': 'specific',
-          'user_ids': userIds,
-        },
+        }),
       );
 
-      if (kDebugMode) {
-        print('✅ Notification sent to ${userIds.length} users');
-        print('Response: ${response.data}');
+      if (response.statusCode == 200) {
+        if (kDebugMode) {
+          print('✅ Notification sent to ${userIds.length} users');
+          print('Response: ${response.body}');
+        }
+        return true;
+      } else {
+        if (kDebugMode) {
+          print('❌ Failed to send notification: ${response.body}');
+        }
+        return false;
       }
-
-      return response.data['success'] == true;
     } catch (e) {
       if (kDebugMode) {
         print('❌ Error sending notification: $e');

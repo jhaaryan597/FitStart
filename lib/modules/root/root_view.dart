@@ -136,22 +136,36 @@ class _CustomBottomNavBarState extends State<CustomBottomNavBar> {
     List<Widget> _navBarItems = [];
 
     for (int i = 0; i < _selectedItemIcon.length; i++) {
-      _navBarItems.add(bottomNavBarItem(
-          _selectedItemIcon[i], _unselectedItemIcon[i], _label[i], i));
+      _navBarItems.add(Expanded(
+        child: bottomNavBarItem(
+            _selectedItemIcon[i], _unselectedItemIcon[i], _label[i], i),
+      ));
     }
-    return Container(
-      decoration: const BoxDecoration(
+    return SafeArea(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
           color: colorBlack,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
-      child: Row(
-        mainAxisSize: MainAxisSize.max,
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: _navBarItems,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.max,
+          children: _navBarItems,
+        ),
       ),
     );
   }
 
-  Widget bottomNavBarItem(activeIcon, inactiveIcon, label, index) {
+  Widget bottomNavBarItem(String activeIcon, String inactiveIcon, String label, int index) {
     return GestureDetector(
       onTap: () {
         widget.onChange(index);
@@ -160,55 +174,56 @@ class _CustomBottomNavBarState extends State<CustomBottomNavBar> {
         });
       },
       child: Container(
-        height: kBottomNavigationBarHeight,
-        width: MediaQuery.of(context).size.width / _selectedItemIcon.length,
+        height: 60,
         decoration: const BoxDecoration(
-            color: colorBlack,
-            borderRadius:
-                BorderRadius.vertical(top: Radius.circular(borderRadiusSize))),
-        child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: _selectedIndex == index
-              ? Container(
-                  decoration: BoxDecoration(
-                      color: colorBlack,
-                      borderRadius: BorderRadius.circular(borderRadiusSize)),
-                  child: Row(
+          color: Colors.transparent,
+        ),
+        child: Center(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            padding: _selectedIndex == index
+                ? const EdgeInsets.symmetric(horizontal: 12, vertical: 8)
+                : const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: _selectedIndex == index
+                  ? neonGreen.withOpacity(0.15)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: _selectedIndex == index
+                ? Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Image.asset(
                         activeIcon,
-                        width: 20,
-                        height: 20,
+                        width: 22,
+                        height: 22,
                         color: neonGreen,
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 6),
                       Flexible(
                         child: Text(
                           label,
                           style: bottomNavTextStyle.copyWith(
                             color: neonGreen,
-                            fontSize: 11,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                           ),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                         ),
                       ),
                     ],
+                  )
+                : Image.asset(
+                    inactiveIcon,
+                    width: 22,
+                    height: 22,
+                    color: lightGray,
                   ),
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Image.asset(
-                      inactiveIcon,
-                      width: 20,
-                      height: 20,
-                      color: lightGray,
-                    ),
-                  ],
-                ),
+          ),
         ),
       ),
     );

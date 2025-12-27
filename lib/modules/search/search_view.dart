@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:FitStart/services/api_service.dart';
 import 'package:geocoding/geocoding.dart';
 
 import '../../model/sport_field.dart';
@@ -48,18 +48,13 @@ class _SearchViewState extends State<SearchView> {
 
   Future<void> _initLocation() async {
     // First try to load saved location from database
-    final user = Supabase.instance.client.auth.currentUser;
     Position? pos;
 
-    if (user != null) {
-      try {
-        final data = await Supabase.instance.client
-            .from('profiles')
-            .select('saved_location')
-            .eq('id', user.id)
-            .single();
-
-        final savedLocation = data['saved_location'] as String?;
+    try {
+      final result = await ApiService.getCurrentUser();
+      if (result['success']) {
+        final data = result['data'];
+        final savedLocation = data['savedLocation'] as String?;
         if (savedLocation != null && savedLocation.isNotEmpty) {
           // Get coordinates from saved address
           try {
@@ -82,9 +77,9 @@ class _SearchViewState extends State<SearchView> {
             print('Error getting coordinates from saved location: $e');
           }
         }
-      } catch (e) {
-        print('Error loading saved location: $e');
       }
+    } catch (e) {
+      print('Error loading saved location: $e');
     }
 
     // If no saved location, try current GPS location
@@ -172,7 +167,7 @@ class _SearchViewState extends State<SearchView> {
         children: [
           FuturisticContainer(
             padding:
-                const EdgeInsets.only(top: 8, left: 16, right: 16, bottom: 16),
+                const EdgeInsets.only(left: 16, right: 16, bottom: 16),
             gradientColors: [
               primaryColor500,
               primaryColor500.withOpacity(0.9),
@@ -181,59 +176,63 @@ class _SearchViewState extends State<SearchView> {
             borderRadius: BorderRadius.vertical(
               bottom: Radius.circular(borderRadiusSize),
             ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    ScaleOnTap(
-                      child: IconButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                        },
-                        icon: const Icon(CupertinoIcons.arrow_left),
-                        color: colorWhite,
-                      ),
-                    ),
-                    const Spacer(),
-                    SlideInCard(
-                      index: 0,
-                      child: FilterChip(
-                        selected: _openNowOnly,
-                        label: const Text('Open now',
-                            style: TextStyle(fontSize: 13)),
-                        selectedColor: primaryColor100,
-                        backgroundColor: colorWhite.withOpacity(0.2),
-                        labelStyle: TextStyle(
-                          color: _openNowOnly ? darkBlue500 : colorWhite,
-                          fontSize: 13,
+            child: SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      ScaleOnTap(
+                        child: IconButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                          },
+                          icon: const Icon(CupertinoIcons.arrow_left),
+                          color: colorWhite,
                         ),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 0),
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        onSelected: (v) {
-                          setState(() {
-                            _openNowOnly = v;
-                            _applyAllFilters();
-                          });
-                        },
+                      ),
+                      const Spacer(),
+                      SlideInCard(
+                        index: 0,
+                        child: FilterChip(
+                          selected: _openNowOnly,
+                          label: const Text('Open now',
+                              style: TextStyle(fontSize: 13)),
+                          selectedColor: primaryColor100,
+                          backgroundColor: colorWhite.withOpacity(0.2),
+                          labelStyle: TextStyle(
+                            color: _openNowOnly ? darkBlue500 : colorWhite,
+                            fontSize: 13,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 0),
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          onSelected: (v) {
+                            setState(() {
+                              _openNowOnly = v;
+                              _applyAllFilters();
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SlideInCard(index: 1, child: showDropdown()),
+                      const SizedBox(width: 8),
+                      SlideInCard(index: 2, child: _sortMenu()),
+                    ],
+                  ),
+                  // Show search bar only if user didn't select a specific category
+                  if (_selectedDropdownItem == 'All')
+                    SlideInCard(
+                      index: 3,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: searchBar(),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    SlideInCard(index: 1, child: showDropdown()),
-                    const SizedBox(width: 8),
-                    SlideInCard(index: 2, child: _sortMenu()),
-                  ],
-                ),
-                // Show search bar only if user didn't select a specific category
-                if (_selectedDropdownItem == 'All')
-                  SlideInCard(
-                    index: 3,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: searchBar(),
-                    ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
           Expanded(

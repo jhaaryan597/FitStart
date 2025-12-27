@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/legacy.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:FitStart/modules/auth/auth_view.dart';
 import 'package:FitStart/modules/onboarding/onboarding_view.dart';
 import 'package:FitStart/modules/root/root_view.dart';
+import 'package:FitStart/services/api_service.dart';
+import 'package:FitStart/services/google_auth_service.dart';
 
-final authViewModelProvider = ChangeNotifierProvider((ref) => AuthViewModel());
-
+// Note: This ViewModel is deprecated and kept for backward compatibility only
+// Use AuthBloc from features/auth/presentation/bloc/ for new implementations
 class AuthViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -16,29 +16,81 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> signInWithGoogle(BuildContext context) async {
+    _setLoading(true);
+    try {
+      // Sign in with Google and get ID token
+      final googleResult = await GoogleAuthService.signInWithGoogle();
+      
+      if (!context.mounted) return;
+
+      if (!googleResult['success']) {
+        if (googleResult['error'] != 'Sign in cancelled') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(googleResult['error'] ?? 'Google sign in failed'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        _setLoading(false);
+        return;
+      }
+
+      // Send ID token to backend
+      final response = await ApiService.googleSignIn(
+        idToken: googleResult['idToken'],
+      );
+
+      if (!context.mounted) return;
+
+      if (response['success']) {
+        // Navigate to main app
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => RootView(currentScreen: 0)),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response['error'] ?? 'Authentication failed'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('An error occurred: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+    _setLoading(false);
+  }
+
   Future<void> signIn(
       BuildContext context, String email, String password) async {
     _setLoading(true);
     try {
-      final response = await Supabase.instance.client.auth.signInWithPassword(
+      final response = await ApiService.login(
         email: email,
         password: password,
       );
       if (!context.mounted) return;
-      if (response.user != null) {
+      if (response['success']) {
         // After login, go directly to the main app screen
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => RootView(currentScreen: 0)),
         );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response['error'] ?? 'Login failed'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
-    } on AuthException catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.message),
-          backgroundColor: Colors.red,
-        ),
-      );
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -55,14 +107,13 @@ class AuthViewModel extends ChangeNotifier {
       String username) async {
     _setLoading(true);
     try {
-      final response = await Supabase.instance.client.auth.signUp(
+      final response = await ApiService.register(
         email: email,
         password: password,
-        emailRedirectTo: 'io.supabase.flutterquickstart://login-callback/',
-        data: {'username': username},
+        username: username,
       );
       if (!context.mounted) return;
-      if (response.user != null) {
+      if (response['success']) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('New User created'),
@@ -73,15 +124,14 @@ class AuthViewModel extends ChangeNotifier {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => OnboardingView()),
         );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response['error'] ?? 'Registration failed'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
-    } on AuthException catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.message),
-          backgroundColor: Colors.red,
-        ),
-      );
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -97,7 +147,8 @@ class AuthViewModel extends ChangeNotifier {
   Future<void> signOut(BuildContext context) async {
     _setLoading(true);
     try {
-      await Supabase.instance.client.auth.signOut();
+      await ApiService.logout();
+      await GoogleAuthService.signOut(); // Also sign out from Google
       if (!context.mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => const AuthView()),

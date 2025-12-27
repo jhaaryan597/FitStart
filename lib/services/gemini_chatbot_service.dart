@@ -3,7 +3,7 @@ import 'package:FitStart/model/chat_message.dart';
 import 'package:FitStart/utils/dummy_data.dart';
 
 class GeminiChatbotService {
-  static const String _apiKey = 'REDACTED_GEMINI_KEY';
+  static const String _apiKey = 'AIzaSyAR9TBlxp4IZ0zBy4qyOh_IMVJPV7zs7nY';
   late final GenerativeModel _model;
   late final ChatSession _chat;
 

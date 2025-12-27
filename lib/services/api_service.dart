@@ -7,7 +7,6 @@ import 'package:flutter/foundation.dart' show kDebugMode, defaultTargetPlatform,
 class ApiService {
   // Change these URLs based on your environment
   static const String _baseUrlDev = 'http://localhost:3000/api/v1';
-  static const String _baseUrlAndroid = 'http://10.0.2.2:3000/api/v1'; // Android emulator
   static const String _baseUrlAndroidDevice = 'http://10.50.84.235:3000/api/v1'; // Real Android device (Mac's IP)
 
   // IMPORTANT: After deploying to Railway, replace this with your Railway URL

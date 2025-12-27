@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:FitStart/services/api_service.dart';
 import 'package:FitStart/model/field_order.dart';
 import 'package:FitStart/model/sport_field.dart';
 import 'package:FitStart/modules/root/root_view.dart';
@@ -143,31 +143,30 @@ class _BookingViewState extends State<BookingView> {
     String? razorpaySignature,
   }) async {
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) return;
-
       DateTime selectedDateTime =
           DateTime(_selectedYear, _selectedMonth, _selectedDate);
 
-      await Supabase.instance.client.from('orders').insert({
-        'user_id': user.id,
-        'venue_id': widget.field.id,
-        'venue_name': widget.field.name,
-        'venue_type': 'sports_venue',
-        'booking_date': dateFormat.format(selectedDateTime).toString(),
-        'booking_times': _selectedTimes,
-        'total_amount': _totalBill,
-        'payment_status': paymentStatus,
-        'payment_method': paymentMethod,
-        'razorpay_payment_id': razorpayPaymentId,
-        'razorpay_order_id': razorpayOrderId,
-        'razorpay_signature': razorpaySignature,
-      });
+      await ApiService.createBooking(
+        venueId: widget.field.id,
+        date: selectedDateTime,
+        startTime: _selectedTimes.isNotEmpty ? _selectedTimes.first : '00:00',
+        endTime: _selectedTimes.isNotEmpty ? _selectedTimes.last : '23:59',
+        totalPrice: _totalBill.toDouble(),
+        additionalInfo: {
+          'venue_name': widget.field.name,
+          'booking_times': _selectedTimes,
+          'payment_status': paymentStatus,
+          'payment_method': paymentMethod,
+          'razorpay_payment_id': razorpayPaymentId,
+          'razorpay_order_id': razorpayOrderId,
+          'razorpay_signature': razorpaySignature,
+        },
+      );
 
       // Track booking for ML recommendations
       MLRecommendationService.trackVenueBooking(widget.field.id);
     } catch (e) {
-      print('Error saving order to Supabase: $e');
+      print('Error saving order: $e');
     }
   }
 
@@ -628,52 +627,55 @@ class _BookingViewState extends State<BookingView> {
           ),
         ],
       ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: const BoxDecoration(color: Colors.white, boxShadow: [
-          BoxShadow(
-            color: lightBlue300,
-            offset: Offset(0, 0),
-            blurRadius: 10,
-          )
-        ]),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  "Total:",
-                  style: descTextStyle,
-                ),
-                Text(
-                  "INR $_totalBill",
-                  style: priceTextStyle,
-                ),
-              ],
-            ),
-            const SizedBox(
-              width: 16,
-            ),
-            Expanded(
-              child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(100, 45),
-                      shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(borderRadiusSize))),
-                  onPressed: !_enableCreateOrderBtn
-                      ? null
-                      : () {
-                          _showPaymentOptionsDialog();
-                        },
-                  child: Text(
-                    "Proceed to Pay",
-                    style: buttonTextStyle,
-                  )),
-            ),
-          ],
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(color: Colors.white, boxShadow: [
+            BoxShadow(
+              color: lightBlue300,
+              offset: Offset(0, 0),
+              blurRadius: 10,
+            )
+          ]),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Total:",
+                    style: descTextStyle,
+                  ),
+                  Text(
+                    "INR $_totalBill",
+                    style: priceTextStyle,
+                  ),
+                ],
+              ),
+              const SizedBox(
+                width: 16,
+              ),
+              Expanded(
+                child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(100, 50),
+                        shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(borderRadiusSize))),
+                    onPressed: !_enableCreateOrderBtn
+                        ? null
+                        : () {
+                            _showPaymentOptionsDialog();
+                          },
+                    child: Text(
+                      "Proceed to Pay",
+                      style: buttonTextStyle,
+                    )),
+              ),
+            ],
+          ),
         ),
       ),
     );
