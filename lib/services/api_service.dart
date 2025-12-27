@@ -9,9 +9,8 @@ class ApiService {
   static const String _baseUrlDev = 'http://localhost:3000/api/v1';
   static const String _baseUrlAndroidDevice = 'http://10.50.84.235:3000/api/v1'; // Real Android device (Mac's IP)
 
-  // IMPORTANT: After deploying to Railway, replace this with your Railway URL
-  // Example: 'https://fitstart-backend-production.up.railway.app/api/v1'
-  static const String _baseUrlProd = 'https://your-railway-app.up.railway.app/api/v1';
+  // Railway production URL
+  static const String _baseUrlProd = 'https://fitstart-backend-production.up.railway.app/api/v1';
 
   /// Get the appropriate base URL based on the platform and environment
   static String get baseUrl {

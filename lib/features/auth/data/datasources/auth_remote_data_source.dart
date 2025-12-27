@@ -27,9 +27,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   static const String _baseUrlDev = 'http://localhost:3000/api/v1';
   static const String _baseUrlAndroidDevice = 'http://10.50.84.235:3000/api/v1';
 
-  // IMPORTANT: After deploying to Railway, replace this with your Railway URL
-  // Example: 'https://fitstart-backend-production.up.railway.app/api/v1'
-  static const String _baseUrlProd = 'https://your-railway-app.up.railway.app/api/v1';
+  // Railway production URL
+  static const String _baseUrlProd = 'https://fitstart-backend-production.up.railway.app/api/v1';
 
   AuthRemoteDataSourceImpl({
     required this.client,
