@@ -1,12 +1,18 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:FitStart/services/api_service.dart';
+import 'package:FitStart/core/cache/cache_manager.dart';
 import 'package:FitStart/modules/setting/settings_view.dart';
 import 'package:FitStart/modules/notification/notification_view.dart';
+import 'package:FitStart/modules/chat/chat_inbox_view.dart';
 import 'package:FitStart/modules/transaction/transaction_history_view.dart';
 import 'package:FitStart/modules/favorites/favorites_view.dart';
+import 'package:FitStart/modules/partner/become_partner_view.dart';
 import 'package:FitStart/services/profile_image_service.dart';
+import 'package:FitStart/services/google_auth_service.dart';
+import 'package:FitStart/services/guest_mode_service.dart';
 import 'package:FitStart/theme.dart';
 
 class ProfileView extends StatefulWidget {
@@ -18,13 +24,73 @@ class _ProfileViewState extends State<ProfileView> {
   String _username = 'Loading...';
   String _email = '';
   String? _profileImageUrl;
+  String? _userId;
   bool _saving = false;
   bool _uploadingImage = false;
 
   @override
   void initState() {
     super.initState();
-    _fetchProfile();
+    _checkGuestMode();
+    _loadProfile();
+  }
+
+  Future<void> _checkGuestMode() async {
+    final isGuest = await GuestModeService.isGuestMode();
+    if (isGuest && mounted) {
+      final canProceed = await GuestModeService.showLoginRequiredDialog(
+        context,
+        feature: 'profile access',
+      );
+      if (!canProceed && mounted) {
+        Navigator.pop(context);
+      }
+    }
+  }
+
+  /// Get current user ID from cache
+  Future<String?> _getUserIdFromCache() async {
+    try {
+      // Try user_cache first
+      final userBox = await Hive.openBox('user_cache');
+      final cachedId = userBox.get('id') as String?;
+      if (cachedId != null) return cachedId;
+      
+      // Try user_profile cache
+      final cachedProfile = await CacheManager.get<Map<String, dynamic>>('user_profile');
+      if (cachedProfile != null) {
+        return cachedProfile['_id'] as String? ?? cachedProfile['id'] as String?;
+      }
+      
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<void> _loadProfile() async {
+    // Try to load from cache first (valid for 5 minutes)
+    final cachedProfile = await CacheManager.get<Map<String, dynamic>>(
+      'user_profile',
+      maxAge: const Duration(minutes: 5),
+    );
+
+    if (cachedProfile != null) {
+      // Use cached data
+      if (mounted) {
+        setState(() {
+          _username = (cachedProfile['username'] as String?) ??
+                     (cachedProfile['name'] as String?) ?? 'No username set';
+          _email = cachedProfile['email'] ?? '';
+          _profileImageUrl = cachedProfile['profileImage'] as String?;
+          _userId = cachedProfile['_id'] as String? ?? cachedProfile['id'] as String?;
+        });
+      }
+      return; // Don't fetch from API
+    }
+
+    // Cache miss or expired - fetch from API
+    await _fetchProfile();
   }
 
   Future<void> _fetchProfile() async {
@@ -32,12 +98,22 @@ class _ProfileViewState extends State<ProfileView> {
       final result = await ApiService.getCurrentUser();
       if (result['success']) {
         final data = result['data'];
+        
+        // Cache the profile data
+        await CacheManager.set('user_profile', data);
+        
+        // Also save to user_cache for quick access
+        final userBox = await Hive.openBox('user_cache');
+        await userBox.put('id', data['_id'] ?? data['id']);
+        await userBox.put('email', data['email']);
+        
         if (mounted) {
           setState(() {
             _username = (data['username'] as String?) ??
                        (data['name'] as String?) ?? 'No username set';
             _email = data['email'] ?? '';
             _profileImageUrl = data['profileImage'] as String?;
+            _userId = data['_id'] as String? ?? data['id'] as String?;
           });
         }
       }
@@ -165,15 +241,31 @@ class _ProfileViewState extends State<ProfileView> {
     });
 
     try {
-      final result = await ApiService.getCurrentUser();
-      if (!result['success']) {
-        _showSnack('Not authenticated');
-        return;
+      // Get user ID from cache first (no auth required)
+      String? userId = _userId ?? await _getUserIdFromCache();
+      
+      if (userId == null) {
+        // Fallback to API only if cache is empty
+        final result = await ApiService.getCurrentUser();
+        if (!result['success']) {
+          // Use email as fallback identifier
+          userId = _email.isNotEmpty ? _email : 'local_user';
+        } else {
+          userId = result['data']['_id'] as String?;
+        }
       }
-
-      final userId = result['data']['_id'] as String;
+      
+      userId ??= 'local_user';
+      
       // Save preset avatar path directly (no upload needed for assets)
       await ProfileImageService.saveProfileImageUrl(userId, assetPath);
+
+      // Update cache with new profile image
+      final cachedProfile = await CacheManager.get<Map<String, dynamic>>('user_profile');
+      if (cachedProfile != null) {
+        cachedProfile['profileImage'] = assetPath;
+        await CacheManager.set('user_profile', cachedProfile);
+      }
 
       setState(() {
         _profileImageUrl = assetPath;
@@ -229,13 +321,21 @@ class _ProfileViewState extends State<ProfileView> {
 
   Future<void> _uploadAndSaveImage(File imageFile) async {
     try {
-      final result = await ApiService.getCurrentUser();
-      if (!result['success']) {
-        _showSnack('Not authenticated');
-        return;
+      // Get user ID from cache first (no auth required)
+      String? userId = _userId ?? await _getUserIdFromCache();
+      
+      if (userId == null) {
+        // Fallback to API only if cache is empty
+        final result = await ApiService.getCurrentUser();
+        if (!result['success']) {
+          // Use email as fallback identifier
+          userId = _email.isNotEmpty ? _email : 'local_user';
+        } else {
+          userId = result['data']['_id'] as String?;
+        }
       }
-
-      final userId = result['data']['_id'] as String;
+      
+      userId ??= 'local_user';
       _showSnack('Uploading image...');
 
       // Upload to backend storage
@@ -245,6 +345,13 @@ class _ProfileViewState extends State<ProfileView> {
       if (imageUrl != null) {
         // Save URL to database
         await ProfileImageService.saveProfileImageUrl(userId, imageUrl);
+
+        // Update cache with new profile image
+        final cachedProfile = await CacheManager.get<Map<String, dynamic>>('user_profile');
+        if (cachedProfile != null) {
+          cachedProfile['profileImage'] = imageUrl;
+          await CacheManager.set('user_profile', cachedProfile);
+        }
 
         setState(() {
           _profileImageUrl = imageUrl;
@@ -261,7 +368,6 @@ class _ProfileViewState extends State<ProfileView> {
 
   Future<void> _openEditSheet() async {
     final nameController = TextEditingController(text: _username);
-    final emailController = TextEditingController(text: _email);
 
     await showModalBottomSheet(
       context: context,
@@ -297,25 +403,81 @@ class _ProfileViewState extends State<ProfileView> {
                 ),
                 Text('Edit Profile', style: titleTextStyle),
                 const SizedBox(height: 16),
+                
+                // Name field - editable
                 TextField(
                   controller: nameController,
-                  textInputAction: TextInputAction.next,
+                  textInputAction: TextInputAction.done,
                   decoration: const InputDecoration(
                     labelText: 'Name',
                     border: OutlineInputBorder(),
                   ),
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email (optional)',
-                    helperText: 'Changing email may require verification link.',
-                    border: OutlineInputBorder(),
+                const SizedBox(height: 16),
+                
+                // Email section - Google OAuth only
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.email, color: primaryColor500, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Email Address',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _email.isEmpty ? 'No email set' : _email,
+                        style: TextStyle(
+                          color: _email.isEmpty ? Colors.grey.shade600 : textPrimary,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _saving ? null : () => _updateEmailViaGoogle(ctx),
+                          icon: Image.asset(
+                            'assets/icons/google_logo.png',
+                            height: 20,
+                            width: 20,
+                          ),
+                          label: Text(_email.isEmpty ? 'Set Email via Google' : 'Update Email via Google'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: textPrimary,
+                            side: const BorderSide(color: primaryColor500),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'For security, email changes require Google authentication',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 16),
+                
+                // Save button - only for name changes
                 SizedBox(
                   width: double.infinity,
                   height: 48,
@@ -324,36 +486,36 @@ class _ProfileViewState extends State<ProfileView> {
                         ? null
                         : () async {
                             final newName = nameController.text.trim();
-                            final newEmail = emailController.text.trim();
 
                             if (newName.isEmpty) {
                               _showSnack('Name cannot be empty');
                               return;
                             }
 
-                            final oldEmail = _email;
-                            final wantsEmailChange =
-                                newEmail.isNotEmpty && newEmail != oldEmail;
-
                             setState(() => _saving = true);
                             try {
-                              // Note: Backend endpoint for profile update needs to be added
-                              // For now, just update local state
+                              // Update name via API
+                              final result = await ApiService.updateProfile(
+                                username: newName,
+                              );
 
-                              // Update local state and UI
-                              setState(() {
-                                _username = newName;
-                                if (wantsEmailChange) _email = newEmail;
-                              });
+                              if (result['success']) {
+                                // Invalidate cache
+                                await CacheManager.delete('user_profile');
 
-                              if (!mounted) return;
-                              Navigator.of(ctx).maybePop();
-                              _showSnack('Profile updated locally (backend endpoint needed)');
+                                // Update local state
+                                setState(() {
+                                  _username = newName;
+                                });
 
-                              // TODO: Add backend API call when endpoint is ready
-                              // await ApiService.updateProfile(username: newName, email: newEmail);
+                                if (!mounted) return;
+                                Navigator.of(ctx).maybePop();
+                                _showSnack('Name updated successfully!');
+                              } else {
+                                _showSnack('Failed to update name: ${result['message']}');
+                              }
                             } catch (e) {
-                              _showSnack('Error updating profile: ${e}');
+                              _showSnack('Error updating name: $e');
                             } finally {
                               if (mounted) setState(() => _saving = false);
                             }
@@ -367,7 +529,7 @@ class _ProfileViewState extends State<ProfileView> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text('Save'),
+                        : const Text('Save Name'),
                   ),
                 ),
               ],
@@ -376,8 +538,52 @@ class _ProfileViewState extends State<ProfileView> {
         );
       },
     );
+  }
 
-    // Do not dispose controllers here; the bottom sheet can rebuild after hot reload.
+  /// Update email through Google OAuth authentication
+  Future<void> _updateEmailViaGoogle(BuildContext ctx) async {
+    setState(() => _saving = true);
+    
+    try {
+      _showSnack('Initiating Google authentication...');
+      
+      // Start Google Sign-In process
+      final googleResult = await GoogleAuthService.signInWithGoogle(forceAccountPicker: true);
+      
+      if (!googleResult['success']) {
+        _showSnack('Google authentication failed: ${googleResult['error']}');
+        return;
+      }
+      
+      final newEmail = googleResult['email'] as String;
+      final idToken = googleResult['idToken'] as String;
+      
+      // Send the ID token to backend for email update verification
+      final result = await ApiService.updateEmailViaGoogle(
+        idToken: idToken,
+        newEmail: newEmail,
+      );
+      
+      if (result['success']) {
+        // Invalidate cache to force refresh
+        await CacheManager.delete('user_profile');
+        
+        // Update local state
+        setState(() {
+          _email = newEmail;
+        });
+        
+        if (!mounted) return;
+        Navigator.of(ctx).maybePop();
+        _showSnack('Email updated successfully via Google authentication!');
+      } else {
+        _showSnack('Failed to update email: ${result['message']}');
+      }
+    } catch (e) {
+      _showSnack('Error during Google authentication: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -515,6 +721,30 @@ class _ProfileViewState extends State<ProfileView> {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => const NotificationView(),
+                ),
+              );
+            },
+          ),
+          _buildMenuItem(
+            context,
+            icon: Icons.chat_bubble_outline,
+            title: 'Messages',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const ChatInboxView(),
+                ),
+              );
+            },
+          ),
+          _buildMenuItem(
+            context,
+            icon: Icons.business_center,
+            title: 'Become a Partner',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const BecomePartnerView(),
                 ),
               );
             },

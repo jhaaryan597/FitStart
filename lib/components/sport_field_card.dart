@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../model/sport_field.dart';
@@ -89,16 +90,34 @@ class _SportFieldCardState extends State<SportFieldCard> {
       ),
       child: Container(
         decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(borderRadiusSize),
-            color: colorWhite,
-            boxShadow: [
-              BoxShadow(
-                color: primaryColor500.withOpacity(0.1),
-                blurRadius: ResponsiveUtils.spacing(context, 20),
-                spreadRadius: 2,
-              )
-            ]),
-        child: Column(
+          borderRadius: BorderRadius.circular(24),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              colorWhite,
+              surfaceColor.withOpacity(0.3),
+            ],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: neonGreen.withOpacity(0.15),
+              blurRadius: 25,
+              spreadRadius: -2,
+              offset: const Offset(0, 10),
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 15,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+            child: Column(
           children: [
             Stack(
               children: [
@@ -121,7 +140,7 @@ class _SportFieldCardState extends State<SportFieldCard> {
                     itemBuilder: (context, index) {
                       return ClipRRect(
                         borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(borderRadiusSize)),
+                            top: Radius.circular(24)),
                         child: ShaderMask(
                           shaderCallback: (bounds) {
                             return LinearGradient(
@@ -264,6 +283,8 @@ class _SportFieldCardState extends State<SportFieldCard> {
               ),
             ),
           ],
+        ),
+        ),
         ),
       ),
     );

@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:FitStart/model/gym.dart';
 import 'package:FitStart/modules/gym/gym_detail_view.dart';
@@ -58,16 +59,34 @@ class _GymCardState extends State<GymCard> {
         },
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16.0),
-            color: colorWhite,
+            borderRadius: BorderRadius.circular(24),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                colorWhite,
+                surfaceColor.withOpacity(0.3),
+              ],
+            ),
             boxShadow: [
               BoxShadow(
-                color: primaryColor500.withOpacity(0.1),
-                blurRadius: 20,
-              )
+                color: neonGreen.withOpacity(0.15),
+                blurRadius: 25,
+                spreadRadius: -2,
+                offset: const Offset(0, 10),
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 15,
+                offset: const Offset(0, 5),
+              ),
             ],
           ),
-          child: Column(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Column(
             children: [
               Stack(
                 children: [
@@ -86,8 +105,8 @@ class _GymCardState extends State<GymCard> {
                         return Container(
                           decoration: BoxDecoration(
                             borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(16),
-                              topRight: Radius.circular(16),
+                              topLeft: Radius.circular(24),
+                              topRight: Radius.circular(24),
                             ),
                             image: DecorationImage(
                               image: AssetImage(_gymImages[index]),
@@ -98,27 +117,60 @@ class _GymCardState extends State<GymCard> {
                       },
                     ),
                   ),
-                  // Page Indicator
+                  // Glassmorphic Page Indicator
                   Positioned(
-                    bottom: 12,
+                    bottom: 16,
                     left: 0,
                     right: 0,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(
-                        _gymImages.length,
-                        (index) => Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _currentImageIndex == index
-                                ? primaryColor500
-                                : Colors.white.withOpacity(0.5),
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 0.5,
+                    child: Center(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.3),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.2),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: List.generate(
+                                _gymImages.length,
+                                (index) => AnimatedContainer(
+                                  duration: const Duration(milliseconds: 300),
+                                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                                  width: _currentImageIndex == index ? 20 : 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(3),
+                                    gradient: _currentImageIndex == index
+                                        ? LinearGradient(
+                                            colors: [neonGreen, lightGreen],
+                                          )
+                                        : null,
+                                    color: _currentImageIndex == index
+                                        ? null
+                                        : Colors.white.withOpacity(0.4),
+                                    boxShadow: _currentImageIndex == index
+                                        ? [
+                                            BoxShadow(
+                                              color: neonGreen.withOpacity(0.5),
+                                              blurRadius: 8,
+                                              spreadRadius: 1,
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -354,6 +406,8 @@ class _GymCardState extends State<GymCard> {
                 ),
               ),
             ],
+              ),
+            ),
           ),
         ),
       ),

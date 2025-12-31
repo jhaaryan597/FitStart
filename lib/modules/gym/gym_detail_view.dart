@@ -6,6 +6,9 @@ import 'package:FitStart/model/gym.dart';
 import 'package:FitStart/modules/gym/gym_membership_view.dart';
 import 'package:FitStart/theme.dart';
 import 'package:FitStart/services/favorites_service.dart';
+import 'package:FitStart/services/ml/interaction_tracker.dart';
+import 'package:FitStart/services/api_service.dart';
+import 'package:FitStart/services/communication_service.dart';
 
 class GymDetailView extends StatefulWidget {
   final Gym gym;
@@ -28,6 +31,26 @@ class _GymDetailViewState extends State<GymDetailView> {
     super.initState();
     _checkFavoriteStatus();
     _generateRandomGymImages();
+    _trackGymView(); // Track gym view for ML recommendations
+  }
+
+  /// Track gym view for ML learning
+  Future<void> _trackGymView() async {
+    try {
+      final userResult = await ApiService.getCurrentUser();
+      if (userResult['success']) {
+        final userId = userResult['data']['_id'] as String?;
+        if (userId != null) {
+          await InteractionTracker.trackView(
+            userId: userId,
+            venueId: widget.gym.id,
+            venueType: 'gym',
+          );
+        }
+      }
+    } catch (e) {
+      print('Error tracking gym view: $e');
+    }
   }
 
   @override
@@ -65,6 +88,24 @@ class _GymDetailViewState extends State<GymDetailView> {
       setState(() {
         _isFavorite = !_isFavorite;
       });
+
+      // Track favorite for ML recommendations
+      try {
+        final userResult = await ApiService.getCurrentUser();
+        if (userResult['success']) {
+          final userId = userResult['data']['_id'] as String?;
+          if (userId != null) {
+            await InteractionTracker.trackFavorite(
+              userId: userId,
+              venueId: widget.gym.id,
+              venueType: 'gym',
+            );
+          }
+        }
+      } catch (e) {
+        print('Error tracking gym favorite: $e');
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -175,6 +216,17 @@ class _GymDetailViewState extends State<GymDetailView> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 16),
+
+                // Communication Buttons
+                CommunicationService.buildCommunicationButtons(
+                  context: context,
+                  phoneNumber: widget.gym.phoneNumber,
+                  venueName: widget.gym.name,
+                  venueId: widget.gym.id,
+                  venueType: 'gym',
+                  initialMessage: 'Hi! I\'m interested in joining ${widget.gym.name}. Could you please provide more details about membership plans and facilities?',
                 ),
 
                 const SizedBox(height: 32),
@@ -373,34 +425,36 @@ class _GymDetailViewState extends State<GymDetailView> {
           )
         ],
       ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: lightBlue300,
-              offset: Offset(0, 0),
-              blurRadius: 10,
-            ),
-          ],
-        ),
-        child: ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            minimumSize: const Size(100, 45),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(borderRadiusSize),
-            ),
-          ),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => GymMembershipView(gym: widget.gym),
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: lightBlue300,
+                offset: Offset(0, 0),
+                blurRadius: 10,
               ),
-            );
-          },
-          child: const Text("Get Membership"),
+            ],
+          ),
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(100, 45),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(borderRadiusSize),
+              ),
+            ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => GymMembershipView(gym: widget.gym),
+                ),
+              );
+            },
+            child: const Text("Get Membership"),
+          ),
         ),
       ),
     );

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:FitStart/services/api_service.dart';
-import 'package:FitStart/modules/auth/auth_view.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:FitStart/modules/auth/google_auth_view.dart';
 import 'package:FitStart/modules/onboarding/onboarding_view.dart';
 import 'package:FitStart/modules/root/root_view.dart';
 import 'package:FitStart/theme.dart';
@@ -40,32 +39,44 @@ class _SplashViewState extends State<SplashView>
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    final onboardingComplete = prefs.getBool('onboarding_complete') ?? false;
-    final jwtToken = prefs.getString('jwt_token');
+    final settingsBox = await Hive.openBox('settings');
+    final authBox = await Hive.openBox('auth');
+    
+    final onboardingComplete = settingsBox.get('onboarding_complete', defaultValue: false) as bool;
+    final isGuestMode = settingsBox.get('guest_mode', defaultValue: false) as bool;
+    final jwtToken = authBox.get('jwt_token') as String?;
+
+    // Flow:
+    // 1. If logged in (JWT token exists) -> Home
+    // 2. If guest mode -> Home (with limited features)
+    // 3. If onboarding not complete -> Onboarding -> Welcome (GoogleAuth)
+    // 4. If onboarding complete but not logged in -> Welcome (GoogleAuth)
 
     if (jwtToken != null) {
-      // User is logged in.
-      // If they also completed onboarding, go to home.
-      // Otherwise, this case shouldn't happen, but we send to home as a fallback.
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => RootView(currentScreen: 0)),
-      );
+      // User is logged in - go directly to home
+      _navigateTo(RootView(currentScreen: 0));
+    } else if (isGuestMode) {
+      // Guest mode - go to home with limited features
+      _navigateTo(RootView(currentScreen: 0));
+    } else if (!onboardingComplete) {
+      // Fresh install - show onboarding first
+      _navigateTo(OnboardingView());
     } else {
-      // User is not logged in.
-      // If they haven't completed onboarding, show it.
-      // Otherwise, show the auth screen.
-      if (onboardingComplete) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const AuthView()),
-        );
-      } else {
-        // This is a fresh install for a new user.
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => OnboardingView()),
-        );
-      }
+      // Onboarding complete but not logged in - show Google auth (welcome)
+      _navigateTo(const GoogleAuthView());
     }
+  }
+
+  void _navigateTo(Widget page) {
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => page,
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 500),
+      ),
+    );
   }
 
   @override

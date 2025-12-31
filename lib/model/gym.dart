@@ -8,6 +8,7 @@ class Gym {
   List<GymAmenity> amenities;
   String address;
   String phoneNumber;
+  String email;
   String openDay;
   String openTime;
   String closeTime;
@@ -36,6 +37,7 @@ class Gym {
     required this.amenities,
     required this.address,
     required this.phoneNumber,
+    required this.email,
     required this.openDay,
     required this.openTime,
     required this.closeTime,

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
-import 'package:FitStart/services/api_service.dart';
 import 'package:FitStart/model/gym.dart';
 import 'package:FitStart/modules/root/root_view.dart';
 import 'package:FitStart/theme.dart';

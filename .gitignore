@@ -9,6 +9,14 @@
 .history
 .svn/
 
+# API Keys and Secrets - DO NOT COMMIT
+*.env
+.env.local
+.env.*.local
+**/secrets/
+**/*_secrets.dart
+**/*apikey*.dart
+
 # IntelliJ related
 *.iml
 *.ipr

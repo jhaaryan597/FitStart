@@ -5,6 +5,7 @@ import 'package:FitStart/services/ml/interaction_tracker.dart';
 import 'package:FitStart/utils/dummy_data.dart';
 import 'package:FitStart/utils/gym_data.dart';
 import 'package:FitStart/services/api_service.dart';
+import 'package:FitStart/services/enhanced_cache_service.dart';
 
 /// Machine Learning Recommendation Service
 ///
@@ -26,22 +27,117 @@ class MLRecommendationService {
   /// - Cosine similarity for nearest neighbor calculation
   /// - Collaborative filtering from similar users
   /// - Hybrid scoring for optimal results
+  /// - Smart detection of new vs returning users
   static Future<List<SportField>> getRecommendedVenues({
     String? userId,
     int limit = 10,
   }) async {
     try {
-      // Use KNN recommender with hybrid ML approach
-      return await KNNRecommenderService.recommend(
-        userId: userId,
-        allFields: sportFieldList,
-        topN: limit,
-        useDistanceIfAvailable: true,
-      );
+      // Check if user is new or returning for different recommendation strategies
+      bool isNewUser = await _isNewUser(userId);
+      
+      print(isNewUser 
+          ? '🆕 Detected new user - using generalized recommendations'
+          : '🔄 Detected returning user - using personalized recommendations');
+      
+      // Try to load from cache first (6-hour cache)
+      final cached = await EnhancedCacheService.getRecommendedVenues();
+      if (cached != null && cached.isNotEmpty && !isNewUser) {
+        print('✅ Loaded ${cached.length} recommendations from cache');
+        // Refresh in background for returning users
+        _refreshVenueRecommendations(userId, limit);
+        return cached.take(limit).toList();
+      }
+      
+      // No cache or new user, generate fresh recommendations
+      return await _generateVenueRecommendations(userId, limit, isNewUser);
     } catch (e) {
       print('Error getting ML recommendations: $e');
       // Fallback to popular venues
       return _getPopularVenues(limit);
+    }
+  }
+  
+  /// Detect if user is new (no significant interaction history)
+  static Future<bool> _isNewUser(String? userId) async {
+    if (userId == null) return true;
+    
+    try {
+      // Check user's interaction count from our tracking data
+      final interactions = await InteractionTracker.getUserInteractions(
+        userId: userId,
+        limit: 5, // Just check if they have any meaningful interactions
+      );
+      
+      // Also check favorites and bookings from backend
+      final userResult = await ApiService.getCurrentUser();
+      if (userResult['success']) {
+        final userData = userResult['data'];
+        final favorites = userData['favorites'] as List? ?? [];
+        
+        // Consider user "new" if they have < 3 total interactions
+        final totalInteractions = interactions.length + favorites.length;
+        return totalInteractions < 3;
+      }
+      
+      return interactions.length < 3; // New user threshold
+    } catch (e) {
+      print('Error checking if new user: $e');
+      return true; // Default to new user on error
+    }
+  }
+  
+  /// Generate fresh venue recommendations with user type awareness
+  static Future<List<SportField>> _generateVenueRecommendations(
+      String? userId, int limit, bool isNewUser) async {
+    try {
+      // Use different strategies for new vs returning users
+      List<SportField> recommendations;
+      
+      if (isNewUser) {
+        // New users: Use generalized recommendations with location + ratings
+        recommendations = await KNNRecommenderService.recommend(
+          userId: null, // Force generalized mode
+          allFields: sportFieldList,
+          topN: limit,
+          useDistanceIfAvailable: true,
+        );
+        print('📊 Generated ${recommendations.length} generalized recommendations for new user');
+      } else {
+        // Returning users: Use full personalized ML approach
+        recommendations = await KNNRecommenderService.recommend(
+          userId: userId,
+          allFields: sportFieldList,
+          topN: limit,
+          useDistanceIfAvailable: true,
+        );
+        print('🧠 Generated ${recommendations.length} personalized recommendations for returning user');
+      }
+      
+      // Cache the results (but shorter cache for new users to adapt quickly)
+      if (isNewUser) {
+        // For new users, we'll just cache normally but refresh more often in background
+        await EnhancedCacheService.cacheRecommendedVenues(recommendations);
+      } else {
+        // Regular cache for established users
+        await EnhancedCacheService.cacheRecommendedVenues(recommendations);
+      }
+      
+      return recommendations;
+    } catch (e) {
+      print('Error generating recommendations: $e');
+      return _getPopularVenues(limit);
+    }
+  }
+  
+  /// Refresh recommendations in background
+  static Future<void> _refreshVenueRecommendations(String? userId, int limit) async {
+    try {
+      await Future.delayed(const Duration(milliseconds: 500));
+      bool isNewUser = await _isNewUser(userId);
+      await _generateVenueRecommendations(userId, limit, isNewUser);
+    } catch (e) {
+      print('Error refreshing recommendations: $e');
     }
   }
 

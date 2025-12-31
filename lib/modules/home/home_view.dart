@@ -11,7 +11,9 @@ import 'package:FitStart/utils/location_service.dart';
 import 'package:FitStart/utils/responsive_utils.dart';
 import 'package:FitStart/utils/animation_utils.dart';
 import 'package:FitStart/services/ml_recommendation_service.dart';
+import 'package:FitStart/core/cache/cache_manager.dart';
 import 'package:FitStart/services/cache_service.dart';
+import 'package:FitStart/services/enhanced_cache_service.dart';
 import 'package:FitStart/services/notification_service.dart';
 import 'package:FitStart/modules/notification/notification_view.dart';
 import 'package:geocoding/geocoding.dart';
@@ -76,9 +78,7 @@ class _HomeViewState extends State<HomeView>
   @override
   void initState() {
     super.initState();
-    // Shuffle initially
-    _allFields = List<SportField>.from(_originalFields)..shuffle();
-    _loadMoreVenues();
+    _loadCachedDataFirst(); // Load cache instantly
     _fetchUsername();
     _loadSavedLocation();
     _loadMLRecommendations();
@@ -91,6 +91,39 @@ class _HomeViewState extends State<HomeView>
         _loadMoreVenues();
       }
     });
+  }
+  
+  /// Load cached data first for instant display
+  Future<void> _loadCachedDataFirst() async {
+    // Try to load from cache
+    final cached = await EnhancedCacheService.getSportFields();
+    if (cached != null && cached.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _allFields = List<SportField>.from(cached)..shuffle();
+          _loadMoreVenues();
+        });
+      }
+      // Data loaded from cache, now refresh in background
+      _refreshDataInBackground();
+    } else {
+      // No cache, load from dummy data
+      _allFields = List<SportField>.from(_originalFields)..shuffle();
+      _loadMoreVenues();
+      // Cache the dummy data
+      await EnhancedCacheService.cacheSportFields(_originalFields);
+    }
+  }
+  
+  /// Refresh data in background without blocking UI
+  Future<void> _refreshDataInBackground() async {
+    // Fetch fresh data from API if available
+    // For now, we use dummy data but in production this would call your API
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) {
+      // Update cache with fresh data
+      await EnhancedCacheService.cacheSportFields(_originalFields);
+    }
   }
 
   Future<void> _loadUnreadNotificationCount() async {
@@ -121,17 +154,21 @@ class _HomeViewState extends State<HomeView>
   }
 
   Future<void> _fetchUsername() async {
-    // Try to load from cache first
-    final cachedData = _cacheService.getCachedUserData();
-    if (cachedData != null) {
+    // Try to load from cache first (valid for 5 minutes, same as profile)
+    final cachedProfile = await CacheManager.get<Map<String, dynamic>>(
+      'user_profile',
+      maxAge: const Duration(minutes: 5),
+    );
+
+    if (cachedProfile != null) {
       if (mounted) {
         setState(() {
-          _username = cachedData['username'];
-          _profileImageUrl = cachedData['profile_image'];
+          _username = (cachedProfile['username'] as String?) ??
+                     (cachedProfile['name'] as String?) ?? 'User';
+          _profileImageUrl = cachedProfile['profileImage'] as String?;
         });
       }
-      // Data loaded from cache, no need to fetch from server
-      return;
+      return; // Data loaded from cache
     }
 
     // Fetch from server if cache is empty or expired
@@ -139,27 +176,22 @@ class _HomeViewState extends State<HomeView>
       final result = await ApiService.getCurrentUser();
       if (result['success']) {
         final data = result['data'];
-        final username = (data['username'] as String?) ??
-                        (data['name'] as String?) ?? 'No username';
-        final profileImage = data['profileImage'] as String?;
-
-        // Cache the data
-        await _cacheService.cacheUserData(
-          username: username,
-          profileImage: profileImage,
-        );
+        
+        // Cache the data using CacheManager
+        await CacheManager.set('user_profile', data);
 
         if (mounted) {
           setState(() {
-            _username = username;
-            _profileImageUrl = profileImage;
+            _username = (data['username'] as String?) ??
+                       (data['name'] as String?) ?? 'User';
+            _profileImageUrl = data['profileImage'] as String?;
           });
         }
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _username = 'No username';
+          _username = 'User';
         });
       }
     }
@@ -198,6 +230,16 @@ class _HomeViewState extends State<HomeView>
       final result = await ApiService.getCurrentUser();
       final userId = result['success'] ? result['data']['_id'] as String? : null;
 
+      // Load from cache first
+      final cachedRecommendations = await EnhancedCacheService.getRecommendedVenues();
+      if (cachedRecommendations != null && cachedRecommendations.isNotEmpty && mounted) {
+        setState(() {
+          _recommendedVenues = cachedRecommendations;
+          _loadingRecommendations = false;
+        });
+      }
+      
+      // Then fetch fresh recommendations
       final recommendations =
           await MLRecommendationService.getRecommendedVenues(
         userId: userId,
@@ -205,6 +247,7 @@ class _HomeViewState extends State<HomeView>
       );
 
       // Cache the recommendations
+      await EnhancedCacheService.cacheRecommendedVenues(recommendations);
       final cacheData = recommendations
           .map((field) => {
                 'name': field.name,
@@ -230,13 +273,39 @@ class _HomeViewState extends State<HomeView>
   }
 
   Future<void> _loadSavedLocation() async {
-    // Try to load from cache first
+    // First check if we have a cached position from LocationService
+    final cachedPosition = LocationService.getLastKnownPosition();
+    final cachedAddress = LocationService.getLastKnownAddress();
+    
+    if (cachedPosition != null && cachedAddress != null) {
+      print('✅ Using cached location from LocationService');
+      setState(() {
+        _currentAddress = cachedAddress;
+        _allFields.forEach((field) {
+          field.distanceKm = LocationService.distanceInKm(
+            cachedPosition.latitude,
+            cachedPosition.longitude,
+            field.latitude,
+            field.longitude,
+          );
+        });
+        _allFields.sort((a, b) => (a.distanceKm ?? double.infinity)
+            .compareTo(b.distanceKm ?? double.infinity));
+        _displayedFields.clear();
+        _currentPage = 1;
+      });
+      _loadMoreVenues();
+      return;
+    }
+    
+    // Try to load from legacy cache
     final cachedLocation = _cacheService.getCachedLocation();
     if (cachedLocation != null && cachedLocation.isNotEmpty) {
       await _getCurrentLocation(address: cachedLocation);
       return;
     }
 
+    // Fetch from API as last resort
     try {
       final result = await ApiService.getCurrentUser();
       if (result['success']) {
@@ -245,6 +314,7 @@ class _HomeViewState extends State<HomeView>
         if (savedLocation != null && savedLocation.isNotEmpty) {
           // Cache the location
           await _cacheService.cacheSavedLocation(savedLocation);
+          await LocationService.setLocationFromAddress(savedLocation);
           await _getCurrentLocation(address: savedLocation);
         }
       }
@@ -340,6 +410,9 @@ class _HomeViewState extends State<HomeView>
   Future<void> _getCurrentLocation({String? address}) async {
     if (address != null && address.isNotEmpty) {
       try {
+        // Cache this address in LocationService
+        await LocationService.setLocationFromAddress(address);
+        
         final locations = await locationFromAddress(address);
         if (locations.isNotEmpty) {
           final location = locations.first;
@@ -367,17 +440,37 @@ class _HomeViewState extends State<HomeView>
           await _saveLocationToDatabase(address);
         }
       } catch (e) {
-        // Handle geocoding error
+        print('Error geocoding address: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not find location. Please try again.'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       }
     } else {
+      // Get current GPS position (uses cached if available and recent)
       final position = await LocationService.getCurrentPosition();
       if (position != null) {
-        final placemark = await LocationService.getCurrentPlacemark();
-        if (placemark != null) {
-          final locationString =
-              "${placemark.street}, ${placemark.locality}, ${placemark.postalCode}";
+        // Try to get address if not already cached
+        String? locationString = LocationService.getLastKnownAddress();
+        
+        if (locationString == null) {
+          final placemark = await LocationService.getCurrentPlacemark();
+          if (placemark != null) {
+            locationString =
+                "${placemark.street ?? ''}, ${placemark.locality ?? ''}, ${placemark.postalCode ?? ''}";
+            // Clean up formatting
+            locationString = locationString.replaceAll(RegExp(r'^,\s*'), '');
+            locationString = locationString.replaceAll(RegExp(r',\s*,'), ',');
+          }
+        }
+        
+        if (mounted) {
           setState(() {
-            _currentAddress = locationString;
+            _currentAddress = locationString ?? 'Current Location';
             _allFields.forEach((field) {
               field.distanceKm = LocationService.distanceInKm(
                 position.latitude,
@@ -397,7 +490,18 @@ class _HomeViewState extends State<HomeView>
           });
 
           // Save location to database
-          await _saveLocationToDatabase(locationString);
+          if (locationString != null) {
+            await _saveLocationToDatabase(locationString);
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Unable to get location. Please enable location services.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
         }
       }
     }
@@ -438,35 +542,28 @@ class _HomeViewState extends State<HomeView>
   }
 
   Widget _buildHeader(BuildContext context) {
-    return FuturisticContainer(
-      gradientColors: [
-        primaryColor500.withOpacity(0.15),
-        primaryColor100.withOpacity(0.1),
-      ],
-      enableGlow: true,
+    return Container(
+      color: backgroundColor,
       padding: ResponsiveUtils.padding(context, all: 16),
       child: SafeArea(
         child: Column(
           children: [
-            GlowEffect(
-              glowColor: primaryColor500,
-              child: UserHeader(
-                username: _username,
-                profileImageUrl: _profileImageUrl,
-                unreadCount: _unreadNotificationCount,
-                onNotificationTap: () async {
-                  // Navigate to notification screen
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const NotificationView(),
-                    ),
-                  );
-                  // Reload unread count when returning from notification screen
-                  _loadUnreadNotificationCount();
-                },
-                getProfileImageProvider: _getProfileImageProvider,
-              ),
+            UserHeader(
+              username: _username,
+              profileImageUrl: _profileImageUrl,
+              unreadCount: _unreadNotificationCount,
+              onNotificationTap: () async {
+                // Navigate to notification screen
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const NotificationView(),
+                  ),
+                );
+                // Reload unread count when returning from notification screen
+                _loadUnreadNotificationCount();
+              },
+              getProfileImageProvider: _getProfileImageProvider,
             ),
             SizedBox(height: ResponsiveUtils.spacing(context, 16)),
             SlideInCard(

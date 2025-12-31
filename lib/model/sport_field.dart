@@ -8,6 +8,7 @@ class SportField {
   List<FieldFacility> facilities;
   String address;
   String phoneNumber;
+  String email;
   String openDay;
   String openTime;
   String closeTime;
@@ -30,6 +31,7 @@ class SportField {
       required this.facilities,
       required this.address,
       required this.phoneNumber,
+      required this.email,
       required this.openDay,
       required this.openTime,
       required this.closeTime,

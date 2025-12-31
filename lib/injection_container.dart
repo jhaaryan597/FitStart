@@ -3,7 +3,6 @@
 
 import 'package:get_it/get_it.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 // Core
 import 'core/network/network_info.dart';
@@ -50,7 +49,6 @@ Future<void> init() async {
   sl.registerLazySingleton<AuthRemoteDataSource>(
     () => AuthRemoteDataSourceImpl(
       client: sl(),
-      sharedPreferences: sl(),
     ),
   );
 
@@ -58,7 +56,5 @@ Future<void> init() async {
   sl.registerLazySingleton<NetworkInfo>(() => NetworkInfoImpl());
 
   //! External
-  final sharedPreferences = await SharedPreferences.getInstance();
-  sl.registerLazySingleton(() => sharedPreferences);
   sl.registerLazySingleton(() => http.Client());
 }

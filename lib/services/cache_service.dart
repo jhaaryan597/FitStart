@@ -1,4 +1,4 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'dart:convert';
 
 class CacheService {
@@ -6,7 +6,7 @@ class CacheService {
   factory CacheService() => _instance;
   CacheService._internal();
 
-  static SharedPreferences? _prefs;
+  static Box? _box;
 
   // Cache keys
   static const String _keyUsername = 'cached_username';
@@ -22,7 +22,7 @@ class CacheService {
   static const int _recommendationsCacheDuration = 30; // 30 minutes
 
   Future<void> init() async {
-    _prefs ??= await SharedPreferences.getInstance();
+    _box ??= await Hive.openBox('app_cache');
   }
 
   // User data caching
@@ -31,18 +31,17 @@ class CacheService {
     String? profileImage,
   }) async {
     await init();
-    await _prefs!.setString(_keyUsername, username);
+    await _box!.put(_keyUsername, username);
     if (profileImage != null) {
-      await _prefs!.setString(_keyProfileImage, profileImage);
+      await _box!.put(_keyProfileImage, profileImage);
     }
-    await _prefs!
-        .setInt(_keyUserDataTimestamp, DateTime.now().millisecondsSinceEpoch);
+    await _box!.put(_keyUserDataTimestamp, DateTime.now().millisecondsSinceEpoch);
   }
 
   Map<String, String?>? getCachedUserData() {
-    if (_prefs == null) return null;
+    if (_box == null) return null;
 
-    final timestamp = _prefs!.getInt(_keyUserDataTimestamp);
+    final timestamp = _box!.get(_keyUserDataTimestamp) as int?;
     if (timestamp == null) return null;
 
     // Check if cache is expired
@@ -52,8 +51,8 @@ class CacheService {
       return null; // Cache expired
     }
 
-    final username = _prefs!.getString(_keyUsername);
-    final profileImage = _prefs!.getString(_keyProfileImage);
+    final username = _box!.get(_keyUsername) as String?;
+    final profileImage = _box!.get(_keyProfileImage) as String?;
 
     if (username == null) return null;
 
@@ -66,11 +65,11 @@ class CacheService {
   // Location caching
   Future<void> cacheSavedLocation(String location) async {
     await init();
-    await _prefs!.setString(_keySavedLocation, location);
+    await _box!.put(_keySavedLocation, location);
   }
 
   String? getCachedLocation() {
-    return _prefs?.getString(_keySavedLocation);
+    return _box?.get(_keySavedLocation) as String?;
   }
 
   // ML Recommendations caching
@@ -78,15 +77,14 @@ class CacheService {
       List<Map<String, dynamic>> recommendations) async {
     await init();
     final jsonString = jsonEncode(recommendations);
-    await _prefs!.setString(_keyRecommendations, jsonString);
-    await _prefs!.setInt(
-        _keyRecommendationsTimestamp, DateTime.now().millisecondsSinceEpoch);
+    await _box!.put(_keyRecommendations, jsonString);
+    await _box!.put(_keyRecommendationsTimestamp, DateTime.now().millisecondsSinceEpoch);
   }
 
   List<Map<String, dynamic>>? getCachedRecommendations() {
-    if (_prefs == null) return null;
+    if (_box == null) return null;
 
-    final timestamp = _prefs!.getInt(_keyRecommendationsTimestamp);
+    final timestamp = _box!.get(_keyRecommendationsTimestamp) as int?;
     if (timestamp == null) return null;
 
     // Check if cache is expired
@@ -96,7 +94,7 @@ class CacheService {
       return null; // Cache expired
     }
 
-    final jsonString = _prefs!.getString(_keyRecommendations);
+    final jsonString = _box!.get(_keyRecommendations) as String?;
     if (jsonString == null) return null;
 
     try {
@@ -110,20 +108,20 @@ class CacheService {
   // Clear specific cache
   Future<void> clearUserDataCache() async {
     await init();
-    await _prefs!.remove(_keyUsername);
-    await _prefs!.remove(_keyProfileImage);
-    await _prefs!.remove(_keyUserDataTimestamp);
+    await _box!.delete(_keyUsername);
+    await _box!.delete(_keyProfileImage);
+    await _box!.delete(_keyUserDataTimestamp);
   }
 
   Future<void> clearRecommendationsCache() async {
     await init();
-    await _prefs!.remove(_keyRecommendations);
-    await _prefs!.remove(_keyRecommendationsTimestamp);
+    await _box!.delete(_keyRecommendations);
+    await _box!.delete(_keyRecommendationsTimestamp);
   }
 
   // Clear all cache
   Future<void> clearAllCache() async {
     await init();
-    await _prefs!.clear();
+    await _box!.clear();
   }
 }

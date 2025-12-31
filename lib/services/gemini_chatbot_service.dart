@@ -3,7 +3,12 @@ import 'package:FitStart/model/chat_message.dart';
 import 'package:FitStart/utils/dummy_data.dart';
 
 class GeminiChatbotService {
-  static const String _apiKey = 'AIzaSyAR9TBlxp4IZ0zBy4qyOh_IMVJPV7zs7nY';
+  // TODO: For production, use --dart-define to pass API key securely
+  // Example: flutter run --dart-define=GEMINI_API_KEY=your_key_here
+  static const String _apiKey = String.fromEnvironment(
+    'GEMINI_API_KEY',
+    defaultValue: 'AIzaSyBp5aJciRGU2SLA6Xnojn7xD7tzlgtRUpw',
+  );
   late final GenerativeModel _model;
   late final ChatSession _chat;
 

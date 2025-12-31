@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:FitStart/modules/auth/auth_view.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:FitStart/modules/auth/google_auth_view.dart';
 
 class OnboardingView extends StatefulWidget {
   @override
@@ -34,8 +34,8 @@ class _OnboardingViewState extends State<OnboardingView> {
   ];
 
   Future<void> _completeOnboarding() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('onboarding_complete', true);
+    final box = await Hive.openBox('settings');
+    await box.put('onboarding_complete', true);
   }
 
   @override
@@ -205,9 +205,18 @@ class _OnboardingViewState extends State<OnboardingView> {
                                 } else {
                                   await _completeOnboarding();
                                   if (!mounted) return;
+                                  // Smooth transition to Google auth
                                   Navigator.of(context).pushReplacement(
-                                    MaterialPageRoute(
-                                      builder: (context) => const AuthView(),
+                                    PageRouteBuilder(
+                                      pageBuilder: (context, animation, secondaryAnimation) => 
+                                        const GoogleAuthView(),
+                                      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                        return FadeTransition(
+                                          opacity: animation,
+                                          child: child,
+                                        );
+                                      },
+                                      transitionDuration: const Duration(milliseconds: 500),
                                     ),
                                   );
                                 }
@@ -223,7 +232,7 @@ class _OnboardingViewState extends State<OnboardingView> {
                               child: Text(
                                 _currentPage < onboardingData.length - 1
                                     ? 'Next'
-                                    : 'Get Started',
+                                    : 'Continue with Google',
                                 style: const TextStyle(
                                   fontSize: 18,
                                   color: Colors.white,

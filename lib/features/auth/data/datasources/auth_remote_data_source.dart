@@ -3,9 +3,10 @@
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../../../core/error/exceptions.dart';
+import '../../../../services/google_auth_service.dart';
 import '../models/user_model.dart';
 
 abstract class AuthRemoteDataSource {
@@ -22,7 +23,6 @@ abstract class AuthRemoteDataSource {
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   final http.Client client;
-  final SharedPreferences sharedPreferences;
 
   static const String _baseUrlDev = 'http://localhost:3000/api/v1';
   static const String _baseUrlAndroidDevice = 'http://10.50.84.235:3000/api/v1';
@@ -32,7 +32,6 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   AuthRemoteDataSourceImpl({
     required this.client,
-    required this.sharedPreferences,
   });
 
   String get baseUrl {
@@ -51,12 +50,21 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         'Content-Type': 'application/json',
       };
 
-  Map<String, String> _headersWithAuth() {
-    final token = sharedPreferences.getString('jwt_token');
+  Future<Map<String, String>> _headersWithAuth() async {
+    final authBox = await Hive.openBox('fitstart_auth');
+    final token = authBox.get('jwt_token') as String?;
     return {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
     };
+  }
+
+  // Save user data to Hive for offline access
+  Future<void> _saveUserToHive(UserModel user, String token) async {
+    final authBox = await Hive.openBox('fitstart_auth');
+    await authBox.put('jwt_token', token);
+    await authBox.put('user_data', user.toJson());
+    await authBox.put('last_login', DateTime.now().toIso8601String());
   }
 
   @override
@@ -76,14 +84,17 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
-        
+
         // Handle nested response structure
         final data = responseData['data'] ?? responseData;
-        
-        // Save JWT token
-        await sharedPreferences.setString('jwt_token', data['token']);
-        
-        return UserModel.fromJson(data['user']);
+
+        final user = UserModel.fromJson(data['user']);
+        final token = data['token'];
+
+        // Save to Hive for persistence
+        await _saveUserToHive(user, token);
+
+        return user;
       } else {
         final error = jsonDecode(response.body);
         throw AuthException(error['error'] ?? 'Login failed');
@@ -113,14 +124,17 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
       if (response.statusCode == 201) {
         final responseData = jsonDecode(response.body);
-        
+
         // Handle nested response structure
         final data = responseData['data'] ?? responseData;
-        
-        // Save JWT token
-        await sharedPreferences.setString('jwt_token', data['token']);
-        
-        return UserModel.fromJson(data['user']);
+
+        final user = UserModel.fromJson(data['user']);
+        final token = data['token'];
+
+        // Save to Hive for persistence
+        await _saveUserToHive(user, token);
+
+        return user;
       } else {
         final error = jsonDecode(response.body);
         throw AuthException(error['error'] ?? 'Registration failed');
@@ -160,10 +174,13 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
           throw AuthException('Server response missing user field');
         }
         
-        // Save JWT token
-        await sharedPreferences.setString('jwt_token', data['token']);
+        final user = UserModel.fromJson(data['user']);
+        final token = data['token'];
         
-        return UserModel.fromJson(data['user']);
+        // Save to Hive for persistence
+        await _saveUserToHive(user, token);
+        
+        return user;
       } else {
         final error = jsonDecode(response.body);
         throw AuthException(error['error'] ?? 'Google sign in failed');
@@ -179,23 +196,31 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<void> logout() async {
     try {
       // Optional: Call backend logout endpoint
-      final token = sharedPreferences.getString('jwt_token');
+      final authBox = await Hive.openBox('fitstart_auth');
+      final token = authBox.get('jwt_token') as String?;
       if (token != null) {
         await client.post(
           Uri.parse('$baseUrl/auth/logout'),
-          headers: _headersWithAuth(),
+          headers: await _headersWithAuth(),
         );
       }
     } finally {
-      // Always remove token locally
-      await sharedPreferences.remove('jwt_token');
+      // Always remove token locally and disconnect from Google
+      final authBox = await Hive.openBox('fitstart_auth');
+      await authBox.delete('jwt_token');
+      await authBox.delete('user_data');
+      await authBox.delete('last_login');
+      
+      // Sign out from Google to clear cached account
+      await GoogleAuthService.signOut();
     }
   }
 
   @override
   Future<UserModel> getCurrentUser() async {
     try {
-      final token = sharedPreferences.getString('jwt_token');
+      final authBox = await Hive.openBox('fitstart_auth');
+      final token = authBox.get('jwt_token') as String?;
       
       if (token == null) {
         throw AuthException('Not authenticated');
@@ -203,7 +228,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
       final response = await client.get(
         Uri.parse('$baseUrl/auth/me'),
-        headers: _headersWithAuth(),
+        headers: await _headersWithAuth(),
       );
 
       if (response.statusCode == 200) {

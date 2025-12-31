@@ -14,9 +14,14 @@ class GoogleAuthService {
   );
 
   /// Sign in with Google and return the ID token
-  static Future<Map<String, dynamic>> signInWithGoogle() async {
+  static Future<Map<String, dynamic>> signInWithGoogle({bool forceAccountPicker = true}) async {
     try {
       developer.log('Starting Google Sign-In...');
+      
+      // Sign out first to force account picker
+      if (forceAccountPicker) {
+        await _googleSignIn.signOut();
+      }
       
       // Trigger the authentication flow
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
@@ -81,8 +86,42 @@ class GoogleAuthService {
   static Future<void> signOut() async {
     try {
       await _googleSignIn.signOut();
+      await _googleSignIn.disconnect();
     } catch (error) {
       print('Error signing out: $error');
+    }
+  }
+
+  /// Attempt to sign in silently (without UI)
+  /// Returns null if no cached authentication exists
+  static Future<Map<String, dynamic>?> signInSilently() async {
+    try {
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signInSilently();
+      
+      if (googleUser == null) {
+        return null;
+      }
+
+      // Obtain the auth details from the request
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+      // Get the ID token
+      final String? idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        return null;
+      }
+
+      return {
+        'success': true,
+        'idToken': idToken,
+        'email': googleUser.email,
+        'displayName': googleUser.displayName,
+        'photoUrl': googleUser.photoUrl,
+      };
+    } catch (error) {
+      developer.log('Error during silent sign-in: $error');
+      return null;
     }
   }
 

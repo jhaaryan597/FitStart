@@ -4,6 +4,7 @@ import 'package:FitStart/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:FitStart/features/auth/presentation/bloc/auth_event.dart';
 import 'package:FitStart/features/auth/presentation/bloc/auth_state.dart';
 import 'package:FitStart/modules/root/root_view.dart';
+import 'package:FitStart/core/cache/cache_manager.dart';
 import 'package:FitStart/theme.dart';
 
 class SignupView extends StatefulWidget {
@@ -53,8 +54,21 @@ class _SignupViewState extends State<SignupView> {
   @override
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthState>(
-      listener: (context, state) {
+      listener: (context, state) async {
         if (state is Authenticated || state is AuthSuccess) {
+          // Cache user data for profile and home screens
+          if (state is Authenticated) {
+            final user = state.user;
+            await CacheManager.set('user_profile', {
+              'username': user.username,
+              'email': user.email,
+              'profileImage': user.profileImage,
+              'phoneNumber': user.phoneNumber,
+              'id': user.id,
+            });
+            print('✅ Cached user data: ${user.username}');
+          }
+          
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (context) => RootView(currentScreen: 0),

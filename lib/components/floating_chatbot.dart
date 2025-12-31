@@ -32,6 +32,7 @@ class _FloatingChatbotState extends State<FloatingChatbot>
       parent: _animationController,
       curve: Curves.easeInOut,
     );
+    // Load welcome message from Gemini
     _loadWelcomeMessage();
   }
 

@@ -1,13 +1,15 @@
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:hive_flutter/hive_flutter.dart';
 
 /// Tracks user interactions for Machine Learning recommendation system.
 ///
 /// This service logs user behavior (views, favorites, bookings) to the
 /// backend API, which is then used by the KNN recommender
 /// for personalized recommendations.
-///
-/// TODO: Backend endpoints for ML interaction tracking need to be created
 class InteractionTracker {
+  static const String _apiBaseUrl = 'https://fitstart-backend-production.up.railway.app/api/v1';
 
   /// Track when user views a venue detail screen
   static Future<void> trackView({
@@ -15,9 +17,34 @@ class InteractionTracker {
     required String venueId,
     required String venueType,
   }) async {
-    // TODO: Implement backend API call
-    if (kDebugMode) {
-      print('Track view: User $userId viewed $venueType $venueId');
+    try {
+      final authBox = await Hive.openBox('auth');
+      final jwtToken = authBox.get('jwt_token') as String?;
+      
+      if (jwtToken != null) {
+        await http.post(
+          Uri.parse('$_apiBaseUrl/ml/interactions/view'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $jwtToken',
+          },
+          body: jsonEncode({
+            'userId': userId,
+            'venueId': venueId,
+            'venueType': venueType,
+            'action': 'view',
+            'timestamp': DateTime.now().toIso8601String(),
+          }),
+        );
+      }
+      
+      if (kDebugMode) {
+        print('✅ Track view: User $userId viewed $venueType $venueId');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error tracking view: $e');
+      }
     }
   }
 
@@ -27,9 +54,34 @@ class InteractionTracker {
     required String venueId,
     required String venueType,
   }) async {
-    // TODO: Implement backend API call
-    if (kDebugMode) {
-      print('Track favorite: User $userId favorited $venueType $venueId');
+    try {
+      final authBox = await Hive.openBox('auth');
+      final jwtToken = authBox.get('jwt_token') as String?;
+      
+      if (jwtToken != null) {
+        await http.post(
+          Uri.parse('$_apiBaseUrl/ml/interactions/favorite'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $jwtToken',
+          },
+          body: jsonEncode({
+            'userId': userId,
+            'venueId': venueId,
+            'venueType': venueType,
+            'action': 'favorite',
+            'timestamp': DateTime.now().toIso8601String(),
+          }),
+        );
+      }
+      
+      if (kDebugMode) {
+        print('✅ Track favorite: User $userId favorited $venueType $venueId');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error tracking favorite: $e');
+      }
     }
   }
 
@@ -52,9 +104,35 @@ class InteractionTracker {
     required String venueType,
     double? price,
   }) async {
-    // TODO: Implement backend API call
-    if (kDebugMode) {
-      print('Track booking: User $userId booked $venueType $venueId for \$$price');
+    try {
+      final authBox = await Hive.openBox('auth');
+      final jwtToken = authBox.get('jwt_token') as String?;
+      
+      if (jwtToken != null) {
+        await http.post(
+          Uri.parse('$_apiBaseUrl/ml/interactions/booking'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $jwtToken',
+          },
+          body: jsonEncode({
+            'userId': userId,
+            'venueId': venueId,
+            'venueType': venueType,
+            'action': 'booking',
+            'price': price,
+            'timestamp': DateTime.now().toIso8601String(),
+          }),
+        );
+      }
+      
+      if (kDebugMode) {
+        print('✅ Track booking: User $userId booked $venueType $venueId for \$$price');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error tracking booking: $e');
+      }
     }
   }
 

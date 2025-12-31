@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:FitStart/services/api_service.dart';
+import 'package:FitStart/services/local_booking_service.dart';
 import 'package:intl/intl.dart';
 import 'package:FitStart/theme.dart';
 import 'package:FitStart/components/no_transaction_message.dart';
@@ -11,34 +11,95 @@ class OrderView extends StatefulWidget {
   State<OrderView> createState() => _OrderViewState();
 }
 
-class _OrderViewState extends State<OrderView> {
+class _OrderViewState extends State<OrderView> with AutomaticKeepAliveClientMixin {
   List<Map<String, dynamic>> _orders = [];
   bool _isLoading = true;
   String _selectedFilter = 'All';
+  
+  @override
+  bool get wantKeepAlive => false; // Don't keep alive to ensure fresh data
 
   @override
   void initState() {
     super.initState();
     _loadOrders();
   }
+  
+  @override
+  void didUpdateWidget(OrderView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reload when widget updates
+    _loadOrders();
+  }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload when returning to this screen
+    if (mounted) {
+      _loadOrders();
+    }
+  }
 
   Future<void> _loadOrders() async {
+    if (!mounted) return;
+    
     setState(() => _isLoading = true);
 
     try {
-      final result = await ApiService.getBookings();
+      // Use LocalBookingService with fallback to demo data
+      final result = await LocalBookingService.getBookingsWithFallback();
       
-      if (result['success'] == true) {
+      if (result['success'] == true && mounted) {
+        final List<dynamic> rawOrders = result['data'] ?? [];
+        
+        // Normalize data to match expected format
+        final normalizedOrders = rawOrders.map((order) {
+          // Handle both old (Supabase) and new (MongoDB) formats
+          return {
+            'id': order['_id'] ?? order['id'],
+            'venue_name': order['venue']?['name'] ?? order['venue_name'] ?? 'Unknown Venue',
+            'venue_id': order['venue']?['_id'] ?? order['venue']?['id'] ?? order['venue_id'],
+            'venue_type': order['venue']?['type'] ?? order['venue_type'] ?? 'Sport',
+            'booking_date': order['bookingDate'] ?? order['booking_date'],
+            'booking_times': order['timeSlots'] != null 
+                ? (order['timeSlots'] as List).map((slot) => '${slot['startTime']} - ${slot['endTime']}').toList()
+                : (order['booking_times'] ?? []),
+            'total_amount': order['pricing']?['totalAmount']?.toInt() ?? order['total_amount'] ?? 0,
+            'payment_status': _mapPaymentStatus(order),
+            'payment_method': order['payment']?['method'] ?? order['payment_method'] ?? 'unknown',
+            'booking_status': order['bookingStatus'] ?? order['booking_status'] ?? 'pending',
+            'created_at': order['createdAt'] ?? order['created_at'] ?? DateTime.now().toIso8601String(),
+            'venue_address': order['venue']?['address'] ?? order['venue_address'] ?? '',
+            'venue_phone': order['venue']?['phoneNumber'] ?? order['venue_phone'] ?? '',
+            'razorpay_payment_id': order['payment']?['paymentId'] ?? order['razorpay_payment_id'],
+          };
+        }).toList();
+        
         setState(() {
-          _orders = List<Map<String, dynamic>>.from(result['data'] ?? []);
+          _orders = normalizedOrders;
           _isLoading = false;
         });
       } else {
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
       print('Error loading orders: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+  
+  String _mapPaymentStatus(Map<String, dynamic> order) {
+    // Handle both formats
+    final paymentStatus = order['payment']?['status'] ?? order['payment_status'];
+    final bookingStatus = order['bookingStatus'] ?? order['booking_status'];
+    
+    if (paymentStatus == 'completed' || bookingStatus == 'confirmed') {
+      return 'paid';
+    } else if (paymentStatus == 'pending' && bookingStatus == 'pending') {
+      return 'pending';
+    } else {
+      return paymentStatus ?? 'pending';
     }
   }
 
@@ -53,6 +114,7 @@ class _OrderViewState extends State<OrderView> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     return Scaffold(
       backgroundColor: backgroundColor,
       body: Column(
@@ -252,13 +314,13 @@ class _OrderViewState extends State<OrderView> {
   Color _getStatusColor(String status) {
     switch (status) {
       case 'paid':
-        return Colors.green;
+        return successColor;
       case 'pay_at_venue':
-        return const Color.fromARGB(237, 255, 255, 255);
+        return oliveGold;
       case 'pending':
-        return Colors.blue;
+        return skyBlue;
       case 'failed':
-        return Colors.red;
+        return errorColor;
       default:
         return neutral400;
     }

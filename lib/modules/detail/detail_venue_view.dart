@@ -6,8 +6,11 @@ import 'package:FitStart/model/sport_field.dart';
 import 'package:FitStart/modules/booking/booking_view.dart';
 import 'package:FitStart/theme.dart';
 import 'package:FitStart/components/facility_card.dart';
+import 'package:FitStart/components/reviews_section.dart';
 import 'package:FitStart/services/favorites_service.dart';
-import 'package:FitStart/services/ml_recommendation_service.dart';
+import 'package:FitStart/services/ml/interaction_tracker.dart';
+import 'package:FitStart/services/api_service.dart';
+import 'package:FitStart/services/communication_service.dart';
 import 'package:FitStart/utils/animation_utils.dart';
 
 class DetailView extends StatefulWidget {
@@ -31,8 +34,26 @@ class _DetailViewState extends State<DetailView> {
     super.initState();
     _generateSportImages();
     _checkFavoriteStatus();
-    // Track venue view for ML recommendations
-    MLRecommendationService.trackVenueView(widget.field.id);
+    _trackVenueView(); // Track venue view for ML recommendations
+  }
+
+  /// Track venue view for ML learning
+  Future<void> _trackVenueView() async {
+    try {
+      final userResult = await ApiService.getCurrentUser();
+      if (userResult['success']) {
+        final userId = userResult['data']['_id'] as String?;
+        if (userId != null) {
+          await InteractionTracker.trackView(
+            userId: userId,
+            venueId: widget.field.id,
+            venueType: 'sport_field',
+          );
+        }
+      }
+    } catch (e) {
+      print('Error tracking venue view: $e');
+    }
   }
 
   @override
@@ -102,11 +123,20 @@ class _DetailViewState extends State<DetailView> {
       });
 
       // Track favorite/unfavorite for ML recommendations
-      if (_isFavorite) {
-        MLRecommendationService.trackFavorite(widget.field.id, 'sports_venue');
-      } else {
-        MLRecommendationService.trackUnfavorite(
-            widget.field.id, 'sports_venue');
+      try {
+        final userResult = await ApiService.getCurrentUser();
+        if (userResult['success']) {
+          final userId = userResult['data']['_id'] as String?;
+          if (userId != null) {
+            await InteractionTracker.trackFavorite(
+              userId: userId,
+              venueId: widget.field.id,
+              venueType: 'sport_field',
+            );
+          }
+        }
+      } catch (e) {
+        print('Error tracking favorite: $e');
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -231,6 +261,19 @@ class _DetailViewState extends State<DetailView> {
                 const SizedBox(
                   height: 16,
                 ),
+                
+                // Communication Buttons
+                CommunicationService.buildCommunicationButtons(
+                  context: context,
+                  phoneNumber: widget.field.phoneNumber,
+                  venueName: widget.field.name,
+                  venueId: widget.field.id,
+                  venueType: 'sports_venue',
+                  initialMessage: 'Hi! I\'m interested in booking ${widget.field.name} for ${widget.field.category.name}. Could you please provide availability and pricing details?',
+                ),
+                const SizedBox(
+                  height: 16,
+                ),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -311,33 +354,47 @@ class _DetailViewState extends State<DetailView> {
                   height: 16,
                 ),
                 FacilityCardList(facilities: widget.field.facilities),
+                const SizedBox(
+                  height: 32,
+                ),
+                // Reviews Section
+                ReviewsSection(
+                  venueId: widget.field.id,
+                  venueType: 'sport_field',
+                  venueName: widget.field.name,
+                ),
+                const SizedBox(
+                  height: 32,
+                ),
               ]),
             ),
           )
         ],
       ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: const BoxDecoration(color: Colors.white, boxShadow: [
-          BoxShadow(
-            color: lightBlue300,
-            offset: Offset(0, 0),
-            blurRadius: 10,
-          ),
-        ]),
-        child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                minimumSize: const Size(100, 45),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(borderRadiusSize))),
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) {
-                return BookingView(
-                  field: widget.field,
-                );
-              }));
-            },
-            child: const Text("Book Now")),
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(color: Colors.white, boxShadow: [
+            BoxShadow(
+              color: lightBlue300,
+              offset: Offset(0, 0),
+              blurRadius: 10,
+            ),
+          ]),
+          child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(100, 45),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(borderRadiusSize))),
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) {
+                  return BookingView(
+                    field: widget.field,
+                  );
+                }));
+              },
+              child: const Text("Book Now")),
+        ),
       ),
     );
   }

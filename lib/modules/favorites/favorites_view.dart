@@ -13,14 +13,33 @@ class FavoritesView extends StatefulWidget {
   State<FavoritesView> createState() => _FavoritesViewState();
 }
 
-class _FavoritesViewState extends State<FavoritesView> {
+class _FavoritesViewState extends State<FavoritesView> with AutomaticKeepAliveClientMixin {
   List<SportField> _favoriteVenues = [];
   bool _isLoading = true;
+  
+  @override
+  bool get wantKeepAlive => false; // Don't keep alive to ensure fresh data
 
   @override
   void initState() {
     super.initState();
     _loadFavorites();
+  }
+  
+  @override
+  void didUpdateWidget(FavoritesView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _loadFavorites();
+  }
+  
+  // Called when returning from other screens
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload when returning to this screen
+    if (mounted) {
+      _loadFavorites();
+    }
   }
 
   Future<void> _loadFavorites() async {
@@ -36,20 +55,25 @@ class _FavoritesViewState extends State<FavoritesView> {
           .where((venue) => favoriteIds.contains(venue.id))
           .toList();
 
-      setState(() {
-        _favoriteVenues = favorites;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _favoriteVenues = favorites;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       print('Error loading favorites: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(

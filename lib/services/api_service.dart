@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, defaultTargetPlatform, TargetPlatform;
 
 /// Base API service for communicating with the Node.js backend
@@ -30,20 +30,20 @@ class ApiService {
 
   /// Get stored JWT token
   static Future<String?> _getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('jwt_token');
+    final box = await Hive.openBox('auth');
+    return box.get('jwt_token') as String?;
   }
 
   /// Save JWT token
   static Future<void> _saveToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('jwt_token', token);
+    final box = await Hive.openBox('auth');
+    await box.put('jwt_token', token);
   }
 
   /// Remove JWT token (logout)
   static Future<void> _removeToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('jwt_token');
+    final box = await Hive.openBox('auth');
+    await box.delete('jwt_token');
   }
 
   /// Get headers with optional authentication
@@ -452,6 +452,304 @@ class ApiService {
         print('Verify payment error: $e');
       }
       return false;
+    }
+  }
+
+  // ==================== PROFILE ENDPOINTS ====================
+
+  /// Update user profile (name, phone, etc.)
+  static Future<Map<String, dynamic>> updateProfile({
+    String? username,
+    String? name,
+    String? phone,
+    String? profileImage,
+  }) async {
+    try {
+      final body = <String, dynamic>{};
+      if (username != null) body['username'] = username;
+      if (name != null) body['name'] = name;
+      if (phone != null) body['phone'] = phone;
+      if (profileImage != null) body['profileImage'] = profileImage;
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/auth/profile'),
+        headers: await _getHeaders(),
+        body: jsonEncode(body),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': data['data']};
+      } else {
+        return {'success': false, 'message': data['message'] ?? 'Update failed'};
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Update profile error: $e');
+      }
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  /// Update email via Google OAuth verification
+  static Future<Map<String, dynamic>> updateEmailViaGoogle({
+    required String idToken,
+    required String newEmail,
+  }) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/auth/update-email-google'),
+        headers: await _getHeaders(),
+        body: jsonEncode({
+          'idToken': idToken,
+          'newEmail': newEmail,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': data['data']};
+      } else {
+        return {'success': false, 'message': data['message'] ?? 'Email update failed'};
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Update email via Google error: $e');
+      }
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  /// Submit partner application
+  static Future<Map<String, dynamic>> submitPartnerApplication(Map<String, dynamic> applicationData) async {
+    if (kDebugMode) {
+      print('📤 Submitting partner application...');
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/partners/apply'),
+        headers: await _getHeaders(),
+        body: jsonEncode(applicationData),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (kDebugMode) {
+        print('📥 Partner application response: ${response.statusCode}');
+        print('📥 Response body: ${response.body}');
+      }
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': data['data']};
+      } else {
+        return {'success': false, 'message': data['message'] ?? 'Application submission failed'};
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Partner application error: $e');
+      }
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  /// Get partner application status
+  static Future<Map<String, dynamic>> getPartnerApplicationStatus() async {
+    if (kDebugMode) {
+      print('📤 Getting partner application status...');
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/partners/my-application'),
+        headers: await _getHeaders(),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': data['data']};
+      } else {
+        return {'success': false, 'message': data['message'] ?? 'Failed to get application status'};
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Get partner status error: $e');
+      }
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // ==================== CHAT ENDPOINTS ====================
+
+  /// Start a new conversation
+  static Future<Map<String, dynamic>> startConversation({
+    required String venueId,
+    required String venueType,
+    required String venueName,
+    required String venueEmail,
+    String? initialMessage,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/chat/conversations'),
+        headers: await _getHeaders(),
+        body: jsonEncode({
+          'venueId': venueId,
+          'venueType': venueType,
+          'venueName': venueName,
+          'venueEmail': venueEmail,
+          'initialMessage': initialMessage,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        if (kDebugMode) {
+          print('✅ Conversation started: ${data['data']?['_id']}');
+        }
+        return {'success': true, 'data': data['data']};
+      } else {
+        return {'success': false, 'error': data['message'] ?? 'Failed to start conversation'};
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error starting conversation: $e');
+      }
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Send a message in a conversation
+  static Future<Map<String, dynamic>> sendMessage({
+    required String conversationId,
+    required String message,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/chat/conversations/$conversationId/messages'),
+        headers: await _getHeaders(),
+        body: jsonEncode({
+          'message': message,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        if (kDebugMode) {
+          print('✅ Message sent: ${data['data']?['_id']}');
+        }
+        return {'success': true, 'data': data['data']};
+      } else {
+        return {'success': false, 'error': data['message'] ?? 'Failed to send message'};
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error sending message: $e');
+      }
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Get user conversations (as customer)
+  static Future<Map<String, dynamic>> getUserConversations() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/chat/conversations/user'),
+        headers: await _getHeaders(),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        if (kDebugMode) {
+          print('✅ Fetched user conversations');
+        }
+        return {'success': true, 'data': data['data'] ?? []};
+      } else {
+        return {'success': false, 'error': data['message'] ?? 'Failed to fetch conversations'};
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error fetching conversations: $e');
+      }
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Get owner conversations (as venue owner)
+  static Future<Map<String, dynamic>> getOwnerConversations() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/chat/conversations/owner'),
+        headers: await _getHeaders(),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        if (kDebugMode) {
+          print('✅ Fetched owner conversations');
+        }
+        return {'success': true, 'data': data['data'] ?? []};
+      } else {
+        return {'success': false, 'error': data['message'] ?? 'Failed to fetch conversations'};
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error fetching owner conversations: $e');
+      }
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Get a specific conversation
+  static Future<Map<String, dynamic>> getConversation(String conversationId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/chat/conversations/$conversationId'),
+        headers: await _getHeaders(),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': data['data']};
+      } else {
+        return {'success': false, 'error': data['message'] ?? 'Failed to fetch conversation'};
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error fetching conversation: $e');
+      }
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Mark conversation as read
+  static Future<Map<String, dynamic>> markConversationAsRead(String conversationId) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/chat/conversations/$conversationId/read'),
+        headers: await _getHeaders(),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': data['data']};
+      } else {
+        return {'success': false, 'error': data['message'] ?? 'Failed to mark as read'};
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error marking as read: $e');
+      }
+      return {'success': false, 'error': e.toString()};
     }
   }
 }

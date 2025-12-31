@@ -178,7 +178,7 @@ The app uses Supabase PostgreSQL with the following main tables:
 
 ### Notification System
 - **Topic-based messaging**: Subscribe to `/topics/all` for broadcasts
-- **Local persistence**: Notifications stored in SharedPreferences
+- **Local persistence**: Notifications stored in Hive
 - **Swipe to delete**: Intuitive gesture controls
 - **Mark as read/unread**: Manage notification status
 - **Badge indicators**: Visual cues for new notifications

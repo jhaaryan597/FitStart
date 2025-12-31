@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:FitStart/services/api_service.dart';
+import 'package:FitStart/services/booking_availability_service.dart';
+import 'package:FitStart/services/guest_mode_service.dart';
 import 'package:FitStart/model/field_order.dart';
 import 'package:FitStart/model/sport_field.dart';
 import 'package:FitStart/modules/root/root_view.dart';
@@ -13,6 +16,7 @@ import 'package:FitStart/utils/razorpay_service.dart';
 import 'package:FitStart/utils/animation_utils.dart';
 import 'package:FitStart/services/favorites_service.dart';
 import 'package:FitStart/services/ml_recommendation_service.dart';
+import 'package:FitStart/services/ml/interaction_tracker.dart';
 
 class BookingView extends StatefulWidget {
   final SportField field;
@@ -45,6 +49,11 @@ class _BookingViewState extends State<BookingView> {
   bool _enableCreateOrderBtn = false;
   final List<String> _selectedTimes = [];
 
+  // Slot availability
+  Map<String, SlotInfo> _slotAvailability = {};
+  bool _isLoadingSlots = false;
+  String? _userEmail;
+
   // Razorpay
   late RazorpayService _razorpayService;
 
@@ -52,12 +61,15 @@ class _BookingViewState extends State<BookingView> {
   bool _isFavorite = false;
   bool _isLoadingFavorite = true;
 
+  // Determine if this is a gym or venue
+  bool get _isGym => widget.field.category.name.toLowerCase().contains('gym') ||
+                     widget.field.category.name.toLowerCase().contains('fitness');
+
   @override
   void initState() {
     super.initState();
-    _controller.addListener(() {
-      setState(() {});
-    });
+    // Removed TextEditingController listener to fix keyboard lag
+    // Use TextInputAction.done instead for better performance
 
     // Initialize Razorpay
     _razorpayService = RazorpayService();
@@ -67,6 +79,50 @@ class _BookingViewState extends State<BookingView> {
 
     // Check favorite status
     _checkFavoriteStatus();
+    
+    // Load user email
+    _loadUserEmail();
+  }
+
+  Future<void> _loadUserEmail() async {
+    try {
+      final userBox = await Hive.openBox('user_cache');
+      _userEmail = userBox.get('email') as String?;
+    } catch (e) {
+      _userEmail = 'guest@fitstart.local';
+    }
+  }
+
+  /// Load slot availability for selected date
+  Future<void> _loadSlotAvailability() async {
+    if (_selectedDate == 0) return;
+
+    setState(() => _isLoadingSlots = true);
+
+    final dateStr = '$_selectedYear-${_selectedMonth.toString().padLeft(2, '0')}-${_selectedDate.toString().padLeft(2, '0')}';
+    final timeSlots = availableTimeList.map((e) => e.time).toList();
+
+    final availability = await BookingAvailabilityService.getDayAvailability(
+      venueId: widget.field.id,
+      date: dateStr,
+      type: _isGym ? BookingAvailabilityService.gymType : BookingAvailabilityService.venueType,
+      timeSlots: timeSlots,
+      maxCapacity: _isGym ? _getGymCapacity() : null,
+    );
+
+    if (mounted) {
+      setState(() {
+        _slotAvailability = availability;
+        _isLoadingSlots = false;
+      });
+    }
+  }
+
+  /// Get gym capacity based on venue (this could come from venue data in future)
+  int _getGymCapacity() {
+    // Default capacity, could be customized per gym
+    // Could be added to SportField model: widget.field.capacity
+    return 30;
   }
 
   Future<void> _checkFavoriteStatus() async {
@@ -105,6 +161,26 @@ class _BookingViewState extends State<BookingView> {
     // Payment was successful
     DateTime selectedDateTime =
         DateTime(_selectedYear, _selectedMonth, _selectedDate);
+
+    // Book the slots in our availability system
+    final dateStr = '$_selectedYear-${_selectedMonth.toString().padLeft(2, '0')}-${_selectedDate.toString().padLeft(2, '0')}';
+    final userEmail = _userEmail ?? 'guest@fitstart.local';
+    
+    final bookingResult = await BookingAvailabilityService.bookMultipleSlots(
+      venueId: widget.field.id,
+      date: dateStr,
+      timeSlots: _selectedTimes,
+      type: _isGym ? BookingAvailabilityService.gymType : BookingAvailabilityService.venueType,
+      userEmail: userEmail,
+      maxCapacity: _isGym ? _getGymCapacity() : null,
+    );
+
+    if (!bookingResult.success) {
+      if (mounted) {
+        _showSnackBar(context, bookingResult.message);
+      }
+      return;
+    }
 
     // Add to dummy list for backward compatibility
     dummyUserOrderList.add(
@@ -164,16 +240,55 @@ class _BookingViewState extends State<BookingView> {
       );
 
       // Track booking for ML recommendations
-      MLRecommendationService.trackVenueBooking(widget.field.id);
+      try {
+        final userResult = await ApiService.getCurrentUser();
+        if (userResult['success']) {
+          final userId = userResult['data']['_id'] as String?;
+          if (userId != null) {
+            await InteractionTracker.trackBooking(
+              userId: userId,
+              venueId: widget.field.id,
+              venueType: 'sport_field',
+              price: _totalBill.toDouble(),
+            );
+          }
+        }
+      } catch (e) {
+        print('Error tracking booking: $e');
+      }
     } catch (e) {
       print('Error saving order: $e');
     }
   }
 
   Future<void> _handlePayAtVenue() async {
+    // Check if user is in guest mode
+    final canProceed = await GuestModeService.requireLogin(context, action: 'booking');
+    if (!canProceed) return;
+
     // Payment will be done at venue
     DateTime selectedDateTime =
         DateTime(_selectedYear, _selectedMonth, _selectedDate);
+
+    // Book the slots in our availability system
+    final dateStr = '$_selectedYear-${_selectedMonth.toString().padLeft(2, '0')}-${_selectedDate.toString().padLeft(2, '0')}';
+    final userEmail = _userEmail ?? 'guest@fitstart.local';
+    
+    final bookingResult = await BookingAvailabilityService.bookMultipleSlots(
+      venueId: widget.field.id,
+      date: dateStr,
+      timeSlots: _selectedTimes,
+      type: _isGym ? BookingAvailabilityService.gymType : BookingAvailabilityService.venueType,
+      userEmail: userEmail,
+      maxCapacity: _isGym ? _getGymCapacity() : null,
+    );
+
+    if (!bookingResult.success) {
+      if (mounted) {
+        _showSnackBar(context, bookingResult.message);
+      }
+      return;
+    }
 
     // Add to dummy list for backward compatibility
     dummyUserOrderList.add(
@@ -427,7 +542,13 @@ class _BookingViewState extends State<BookingView> {
                                           onTap: () {
                                             setState(() {
                                               _selectedDate = e;
+                                              // Clear previously selected times when date changes
+                                              _selectedTimes.clear();
+                                              _totalBill = 0;
+                                              _enableCreateOrderBtn = false;
                                             });
+                                            // Load slot availability for the new date
+                                            _loadSlotAvailability();
                                           },
                                           child: Container(
                                             width: 40,
@@ -546,22 +667,38 @@ class _BookingViewState extends State<BookingView> {
                                 ],
                               ),
                               // const SizedBox(height: 16,),
-                              GridView.count(
+                              _isLoadingSlots
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(20),
+                                      child: Center(
+                                        child: CircularProgressIndicator(
+                                          color: primaryColor500,
+                                        ),
+                                      ),
+                                    )
+                                  : GridView.count(
                                 crossAxisCount: 4,
                                 shrinkWrap: true,
                                 physics: const NeverScrollableScrollPhysics(),
                                 crossAxisSpacing: 16,
                                 mainAxisSpacing: 16,
-                                childAspectRatio: 2,
+                                childAspectRatio: _isGym ? 1.5 : 2,
                                 children: availableTimeList.map(
                                   (e) {
                                     final isSelected =
                                         _selectedTimes.contains(e.time);
+                                    
+                                    // Check real-time availability
+                                    final slotInfo = _slotAvailability[e.time];
+                                    final bool isAvailable = slotInfo != null 
+                                        ? slotInfo.status != SlotStatus.full 
+                                        : e.isAvailable;
+                                    final bool isLimited = slotInfo?.status == SlotStatus.limited;
+                                    
                                     return GestureDetector(
                                       onTap: () {
                                         setState(() {
-                                          if (e.isAvailable) {
-                                            // _selectedTime = e.time;
+                                          if (isAvailable) {
                                             debugPrint(
                                                 "selected time: $_selectedTime");
 
@@ -586,29 +723,50 @@ class _BookingViewState extends State<BookingView> {
                                         decoration: BoxDecoration(
                                             color: (isSelected)
                                                 ? primaryColor100
-                                                : e.isAvailable
-                                                    ? Colors.white
+                                                : isAvailable
+                                                    ? (isLimited ? Colors.orange.withOpacity(0.1) : Colors.white)
                                                     : neutral200,
                                             borderRadius:
                                                 BorderRadius.circular(8),
                                             border: Border.all(
                                                 color: (isSelected)
                                                     ? primaryColor500
-                                                    : e.isAvailable
-                                                        ? neutral200
+                                                    : isAvailable
+                                                        ? (isLimited ? Colors.orange : neutral200)
                                                         : neutral200,
                                                 width: 1)),
                                         alignment: Alignment.center,
-                                        child: Text(
-                                          e.time,
-                                          style: descTextStyle.copyWith(
-                                            color: (isSelected)
-                                                ? primaryColor500
-                                                : e.isAvailable
-                                                    ? neutral700
-                                                    : neutral500,
-                                          ),
-                                          textAlign: TextAlign.center,
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              e.time,
+                                              style: descTextStyle.copyWith(
+                                                color: (isSelected)
+                                                    ? primaryColor500
+                                                    : isAvailable
+                                                        ? neutral700
+                                                        : neutral500,
+                                                fontSize: 13,
+                                              ),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                            if (_isGym && slotInfo != null) ...[
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                slotInfo.displayText,
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: slotInfo.status == SlotStatus.full
+                                                      ? Colors.red
+                                                      : slotInfo.status == SlotStatus.limited
+                                                          ? Colors.orange
+                                                          : Colors.green,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ],
+                                          ],
                                         ),
                                       ),
                                     );
@@ -681,7 +839,17 @@ class _BookingViewState extends State<BookingView> {
     );
   }
 
-  void _showPaymentOptionsDialog() {
+  void _showPaymentOptionsDialog() async {
+    // Check if user is guest and block booking
+    final isGuest = await GuestModeService.isGuestMode();
+    if (isGuest) {
+      final canProceed = await GuestModeService.showLoginRequiredDialog(
+        context,
+        feature: 'booking at ' + ((_isGym) ? 'gyms' : 'venues'),
+      );
+      if (!canProceed) return;
+    }
+
     showDialog(
       context: context,
       builder: (BuildContext context) {

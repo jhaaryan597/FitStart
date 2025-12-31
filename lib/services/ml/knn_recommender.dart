@@ -1,12 +1,13 @@
 import 'dart:math' as math;
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:FitStart/model/sport_field.dart';
 import 'package:FitStart/utils/dummy_data.dart';
+import 'package:FitStart/utils/location_service.dart';
 
 // Backend API URL
-const String apiBaseUrl = 'http://localhost:3000/api/v1'; // Change to your server URL
+const String apiBaseUrl = 'https://fitstart-backend-production.up.railway.app/api/v1';
 
 /// On-device kNN-style recommender using cosine similarity over feature vectors.
 /// Features: one-hot category, one-hot facilities, normalized price, rating,
@@ -39,9 +40,9 @@ class KNNRecommenderService {
 
     if (userId != null) {
       try {
-        // Get JWT token from storage
-        final prefs = await SharedPreferences.getInstance();
-        final jwtToken = prefs.getString('jwt_token');
+        // Get JWT token from Hive
+        final authBox = await Hive.openBox('auth');
+        final jwtToken = authBox.get('jwt_token') as String?;
         
         if (jwtToken != null) {
           // Get user bookings from backend API
@@ -84,14 +85,9 @@ class KNNRecommenderService {
       }
     }
 
-    // Cold start: no user history -> top rated then cheaper.
+    // Enhanced Cold Start: Intelligent recommendations for new users
     if (bookedFieldIds.isEmpty && interactedFieldIds.isEmpty) {
-      final sorted = List<SportField>.from(fields)
-        ..sort((a, b) {
-          final r = b.rating.compareTo(a.rating);
-          return r != 0 ? r : a.price.compareTo(b.price);
-        });
-      return sorted.take(topN).toList();
+      return await _getGeneralizedRecommendations(fields, topN, userId);
     }
 
     // Combine booked and interacted venues for user profile
@@ -122,8 +118,8 @@ class KNNRecommenderService {
     Map<String, double> collaborativeScores = {};
     if (userId != null) {
       try {
-        final prefs = await SharedPreferences.getInstance();
-        final jwtToken = prefs.getString('jwt_token');
+        final authBox = await Hive.openBox('auth');
+        final jwtToken = authBox.get('jwt_token') as String?;
         
         if (jwtToken != null) {
           // Call backend API for ML recommendations (if implemented)
@@ -251,6 +247,117 @@ class KNNRecommenderService {
     }
     if (na == 0 || nb == 0) return 0;
     return dot / (math.sqrt(na) * math.sqrt(nb));
+  }
+
+  /// Intelligent generalized recommendations for new users
+  /// Uses location proximity, ratings, popularity, and variety
+  static Future<List<SportField>> _getGeneralizedRecommendations(
+      List<SportField> fields, int topN, String? userId) async {
+    final scored = <_Scored<SportField>>[];
+    
+    // Get user's location for distance-based recommendations
+    final userPosition = LocationService.getLastKnownPosition();
+    
+    // Calculate diverse category representation
+    final categoryCount = <String, int>{};
+    final maxPerCategory = (topN / 3).ceil(); // Max venues per category for diversity
+    
+    for (final field in fields) {
+      double score = 0.0;
+      
+      // 1. Rating quality (40% weight) - prioritize highly rated venues
+      final ratingScore = (field.rating - 1) / 4; // Normalize 1-5 to 0-1
+      score += 0.4 * ratingScore;
+      
+      // 2. Location proximity (30% weight) - prefer nearby venues if location available
+      if (userPosition != null) {
+        field.distanceKm ??= LocationService.distanceInKm(
+          userPosition.latitude,
+          userPosition.longitude,
+          field.latitude,
+          field.longitude,
+        );
+        
+        final maxDistance = 50.0; // 50km max reasonable distance
+        final distanceScore = 1.0 - ((field.distanceKm ?? maxDistance) / maxDistance).clamp(0.0, 1.0);
+        score += 0.3 * distanceScore;
+      } else {
+        // No location, give slight boost to popular areas
+        score += 0.15; // Neutral score when no location
+      }
+      
+      // 3. Price accessibility (20% weight) - prefer mid-range pricing
+      final priceScore = 1.0 - (field.price / 200.0).clamp(0.0, 1.0); // Normalize assuming max price ~200
+      score += 0.2 * priceScore;
+      
+      // 4. Facility completeness (10% weight) - venues with more facilities
+      final facilityScore = field.facilities.length / 10.0; // Assume max 10 facilities
+      score += 0.1 * facilityScore.clamp(0.0, 1.0);
+      
+      // Category diversity bonus - ensure variety in recommendations
+      final categoryName = field.category.name;
+      final currentCategoryCount = categoryCount[categoryName] ?? 0;
+      if (currentCategoryCount < maxPerCategory) {
+        score += 0.05; // Small bonus for category diversity
+      } else {
+        score -= 0.1; // Penalty for over-representation
+      }
+      
+      scored.add(_Scored(item: field, score: score));
+    }
+    
+    // Sort by score and apply category diversity
+    scored.sort((a, b) => b.score.compareTo(a.score));
+    
+    final result = <SportField>[];
+    final selectedCategories = <String, int>{};
+    
+    for (final scored_item in scored) {
+      if (result.length >= topN) break;
+      
+      final field = scored_item.item;
+      final categoryName = field.category.name;
+      final categoryCount = selectedCategories[categoryName] ?? 0;
+      
+      // Add if we haven't exceeded category limit or if we need to fill remaining slots
+      if (categoryCount < maxPerCategory || result.length < topN - 2) {
+        result.add(field);
+        selectedCategories[categoryName] = categoryCount + 1;
+      }
+    }
+    
+    // Track this as a generalized recommendation for learning
+    if (userId != null) {
+      _trackGeneralizedRecommendation(userId, result.map((f) => f.id).toList());
+    }
+    
+    return result;
+  }
+  
+  /// Track generalized recommendations for future learning
+  static Future<void> _trackGeneralizedRecommendation(String userId, List<String> venueIds) async {
+    try {
+      final authBox = await Hive.openBox('auth');
+      final jwtToken = authBox.get('jwt_token') as String?;
+      
+      if (jwtToken != null) {
+        await http.post(
+          Uri.parse('$apiBaseUrl/ml/track-generalized'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $jwtToken',
+          },
+          body: jsonEncode({
+            'userId': userId,
+            'venueIds': venueIds,
+            'recommendationType': 'generalized_new_user',
+            'timestamp': DateTime.now().toIso8601String(),
+          }),
+        );
+      }
+    } catch (e) {
+      print('Error tracking generalized recommendation: $e');
+    }
   }
 }
 

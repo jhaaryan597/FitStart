@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:FitStart/services/api_service.dart';
-import 'package:FitStart/modules/auth/auth_view.dart';
+import 'package:FitStart/services/local_chat_service.dart';
+import 'package:FitStart/modules/auth/google_auth_view.dart';
 import 'package:FitStart/modules/setting/privacy_policy_view.dart';
 import 'package:FitStart/modules/setting/support_help_view.dart';
 import 'package:FitStart/modules/setting/faq_view.dart';
@@ -115,11 +116,14 @@ class SettingsView extends StatelessWidget {
               height: 56,
               child: ElevatedButton(
                 onPressed: () async {
+                  // Clear chat cache before logout
+                  await LocalChatService.clearAllConversations();
+                  
                   final authBloc = context.read<AuthBloc>();
                   authBloc.add(LogoutEvent());
                   if (context.mounted) {
                     Navigator.of(context).pushAndRemoveUntil(
-                      MaterialPageRoute(builder: (context) => const AuthView()),
+                      MaterialPageRoute(builder: (context) => const GoogleAuthView()),
                       (route) => false,
                     );
                   }
@@ -236,7 +240,7 @@ class SettingsView extends StatelessWidget {
                   await ApiService.logout();
 
                   Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (context) => const AuthView()),
+                    MaterialPageRoute(builder: (context) => const GoogleAuthView()),
                     (route) => false,
                   );
                   ScaffoldMessenger.of(context).showSnackBar(

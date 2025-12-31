@@ -3,7 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 /// HiveStorage for local persistence
 ///
 /// Note: This was previously used for Supabase session storage
-/// Now using SharedPreferences for JWT token storage instead
+/// Now using Hive for all local storage including JWT tokens and notifications
 class HiveStorage {
   final String key = 'jwt_auth_storage';
 

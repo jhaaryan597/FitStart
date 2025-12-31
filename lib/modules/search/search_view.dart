@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:FitStart/services/api_service.dart';
-import 'package:geocoding/geocoding.dart';
 
 import '../../model/sport_field.dart';
 import '../../theme.dart';
@@ -11,18 +10,19 @@ import '../../utils/dummy_data.dart';
 import '../../components/sport_field_list.dart';
 import '../../utils/location_service.dart';
 import '../../utils/animation_utils.dart';
+import '../../services/enhanced_cache_service.dart';
 
 class SearchView extends StatefulWidget {
   final String selectedDropdownItem;
   final List<SportField> fieldList;
 
-  SearchView({required this.selectedDropdownItem}) : fieldList = sportFieldList;
+  SearchView({super.key, required this.selectedDropdownItem}) : fieldList = sportFieldList;
 
   @override
   State<SearchView> createState() => _SearchViewState();
 }
 
-class _SearchViewState extends State<SearchView> {
+class _SearchViewState extends State<SearchView> with AutomaticKeepAliveClientMixin {
   String _query = "";
   String _selectedDropdownItem = "All";
   List<SportField> _fieldList = [];
@@ -31,25 +31,66 @@ class _SearchViewState extends State<SearchView> {
   Position? _position;
   bool _openNowOnly = false;
   String _sortBy = 'Nearest';
+  
+  @override
+  bool get wantKeepAlive => true; // Keep state alive when switching tabs
 
   @override
   void initState() {
     super.initState();
     _query = widget.selectedDropdownItem;
     _controller.text = _query;
-    _fieldList = widget.fieldList;
+    _loadFieldsWithCache();
     _selectedDropdownItem =
         _query.isNotEmpty ? widget.selectedDropdownItem : 'All';
-    // initial populate
-    _applyAllFilters();
     // try to get user location
     _initLocation();
   }
+  
+  /// Load fields with cache-first strategy
+  Future<void> _loadFieldsWithCache() async {
+    // Try to load from cache first
+    final cached = await EnhancedCacheService.getSportFields();
+    if (cached != null && cached.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _fieldList = cached;
+          _applyAllFilters();
+        });
+      }
+    } else {
+      // No cache, use widget data
+      _fieldList = widget.fieldList;
+      _applyAllFilters();
+      // Cache the data
+      await EnhancedCacheService.cacheSportFields(widget.fieldList);
+    }
+  }
 
   Future<void> _initLocation() async {
-    // First try to load saved location from database
+    // First try cached position from LocationService
+    final cachedPos = LocationService.getLastKnownPosition();
+    
+    if (cachedPos != null) {
+      print('\u2705 Using cached location from LocationService');
+      if (!mounted) return;
+      setState(() {
+        _position = cachedPos;
+        for (final f in _fieldList) {
+          f.distanceKm = LocationService.distanceInKm(
+            cachedPos.latitude,
+            cachedPos.longitude,
+            f.latitude,
+            f.longitude,
+          );
+        }
+        _applyAllFilters();
+      });
+      return;
+    }
+    
+    // Try to load saved location from database
     Position? pos;
-
     try {
       final result = await ApiService.getCurrentUser();
       if (result['success']) {
@@ -58,21 +99,8 @@ class _SearchViewState extends State<SearchView> {
         if (savedLocation != null && savedLocation.isNotEmpty) {
           // Get coordinates from saved address
           try {
-            final locations = await locationFromAddress(savedLocation);
-            if (locations.isNotEmpty) {
-              pos = Position(
-                latitude: locations.first.latitude,
-                longitude: locations.first.longitude,
-                timestamp: DateTime.now(),
-                accuracy: 0,
-                altitude: 0,
-                heading: 0,
-                speed: 0,
-                speedAccuracy: 0,
-                altitudeAccuracy: 0,
-                headingAccuracy: 0,
-              );
-            }
+            await LocationService.setLocationFromAddress(savedLocation);
+            pos = LocationService.getLastKnownPosition();
           } catch (e) {
             print('Error getting coordinates from saved location: $e');
           }
@@ -82,10 +110,8 @@ class _SearchViewState extends State<SearchView> {
       print('Error loading saved location: $e');
     }
 
-    // If no saved location, try current GPS location
-    if (pos == null) {
-      pos = await LocationService.getCurrentPosition();
-    }
+    // If no saved location, try current GPS location (with cache)
+    pos ??= await LocationService.getCurrentPosition();
 
     if (!mounted) return;
     setState(() {
@@ -154,6 +180,7 @@ class _SearchViewState extends State<SearchView> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     return Scaffold(
       backgroundColor: lightBlue100,
       appBar: AppBar(
@@ -306,8 +333,8 @@ class _SearchViewState extends State<SearchView> {
           "Cricket"
         ]
             .map<DropdownMenuItem<String>>((value) => DropdownMenuItem(
-                  child: Text(value),
                   value: value,
+                  child: Text(value),
                 ))
             .toList(),
         onChanged: (value) {

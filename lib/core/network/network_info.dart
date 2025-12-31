@@ -13,7 +13,7 @@ class NetworkInfoImpl implements NetworkInfo {
     try {
       // Simple connectivity check using a DNS lookup-like approach
       // You can also use connectivity_plus package for better detection
-      final connectivityResult = await Geolocator.checkPermission();
+      await Geolocator.checkPermission();
       return true; // Simplified, you should use connectivity_plus package
     } catch (e) {
       return false;

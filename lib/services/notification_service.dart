@@ -1,45 +1,48 @@
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:FitStart/model/notification_item.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:hive/hive.dart';
+import 'package:FitStart/model/notification_item.dart';
 import 'package:FitStart/modules/notification/notification_view.dart';
-import 'package:FitStart/main.dart';
+import 'package:FitStart/main.dart'; // For navigatorKey
 
-// Backend API URL
-const String apiBaseUrl = 'http://localhost:3000/api/v1'; // Change to your server URL
+// Backend API URL (Railway production)
+const String apiBaseUrl = 'https://fitstart-backend-production.up.railway.app/api/v1';
 
-// Top-level function for background message handling
+// Background message handler (must be top-level function)
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (kDebugMode) {
-    print("Background Message: ${message.messageId}");
-    print("Title: ${message.notification?.title}");
-    print("Body: ${message.notification?.body}");
-    print("Data: ${message.data}");
+    print('🔔 Background Message Received!');
+    print('Message ID: ${message.messageId}');
+    print('Title: ${message.notification?.title}');
+    print('Body: ${message.notification?.body}');
+    print('Data: ${message.data}');
   }
-
-  // Store notification even in background
+  
+  // Save notification to storage
   await NotificationService._saveNotificationToStorage(message);
+  if (kDebugMode) {
+    print('✅ Background notification saved to storage');
+  }
 }
 
 class NotificationService {
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
-  final FlutterLocalNotificationsPlugin _localNotifications =
-      FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
   String? _fcmToken;
-  static const String _notificationsKey = 'stored_notifications';
+  static const String _notificationsKey = 'notifications';
 
   String? get fcmToken => _fcmToken;
 
-  // Get stored notifications
+  // Get stored notifications from Hive
   static Future<List<NotificationItem>> getStoredNotifications() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final String? notificationsJson = prefs.getString(_notificationsKey);
+      final Box<dynamic> authBox = await Hive.openBox('fitstart_auth');
+      final String? notificationsJson = authBox.get(_notificationsKey);
 
       if (notificationsJson == null) return [];
 
@@ -55,10 +58,10 @@ class NotificationService {
     }
   }
 
-  // Save notification to local storage
+  // Save notification to Hive storage
   static Future<void> _saveNotificationToStorage(RemoteMessage message) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final Box<dynamic> authBox = await Hive.openBox('fitstart_auth');
 
       // Get existing notifications
       List<NotificationItem> notifications = await getStoredNotifications();
@@ -88,7 +91,7 @@ class NotificationService {
       // Save back to storage
       final List<Map<String, dynamic>> jsonList =
           notifications.map((n) => n.toJson()).toList();
-      await prefs.setString(_notificationsKey, jsonEncode(jsonList));
+      await authBox.put(_notificationsKey, jsonEncode(jsonList));
 
       if (kDebugMode) {
         print('✅ Notification saved to storage: ${newNotification.title}');
@@ -109,10 +112,10 @@ class NotificationService {
       if (index != -1) {
         notifications[index] = notifications[index].copyWith(isRead: true);
 
-        final prefs = await SharedPreferences.getInstance();
+        final Box<dynamic> authBox = await Hive.openBox('fitstart_auth');
         final List<Map<String, dynamic>> jsonList =
             notifications.map((n) => n.toJson()).toList();
-        await prefs.setString(_notificationsKey, jsonEncode(jsonList));
+        await authBox.put(_notificationsKey, jsonEncode(jsonList));
       }
     } catch (e) {
       if (kDebugMode) {
@@ -129,10 +132,10 @@ class NotificationService {
       notifications =
           notifications.map((n) => n.copyWith(isRead: true)).toList();
 
-      final prefs = await SharedPreferences.getInstance();
+      final Box<dynamic> authBox = await Hive.openBox('fitstart_auth');
       final List<Map<String, dynamic>> jsonList =
           notifications.map((n) => n.toJson()).toList();
-      await prefs.setString(_notificationsKey, jsonEncode(jsonList));
+      await authBox.put(_notificationsKey, jsonEncode(jsonList));
     } catch (e) {
       if (kDebugMode) {
         print('Error marking all as read: $e');
@@ -147,10 +150,10 @@ class NotificationService {
 
       notifications.removeWhere((n) => n.id == notificationId);
 
-      final prefs = await SharedPreferences.getInstance();
+      final Box<dynamic> authBox = await Hive.openBox('fitstart_auth');
       final List<Map<String, dynamic>> jsonList =
           notifications.map((n) => n.toJson()).toList();
-      await prefs.setString(_notificationsKey, jsonEncode(jsonList));
+      await authBox.put(_notificationsKey, jsonEncode(jsonList));
     } catch (e) {
       if (kDebugMode) {
         print('Error deleting notification: $e');
@@ -161,8 +164,8 @@ class NotificationService {
   // Clear all notifications
   static Future<void> clearAllNotifications() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_notificationsKey);
+      final Box<dynamic> authBox = await Hive.openBox('fitstart_auth');
+      await authBox.delete(_notificationsKey);
     } catch (e) {
       if (kDebugMode) {
         print('Error clearing notifications: $e');
@@ -275,9 +278,9 @@ class NotificationService {
     try {
       if (_fcmToken == null) return;
 
-      // Get JWT token from storage
-      final prefs = await SharedPreferences.getInstance();
-      final jwtToken = prefs.getString('jwt_token');
+      // Get JWT token from Hive
+      final Box<dynamic> authBox = await Hive.openBox('fitstart_auth');
+      final jwtToken = authBox.get('jwt_token');
 
       if (jwtToken == null) {
         if (kDebugMode) {
@@ -367,9 +370,9 @@ class NotificationService {
     Map<String, dynamic>? data,
   }) async {
     try {
-      // Get JWT token from storage
-      final prefs = await SharedPreferences.getInstance();
-      final jwtToken = prefs.getString('jwt_token');
+      // Get JWT token from Hive
+      final Box<dynamic> authBox = await Hive.openBox('fitstart_auth');
+      final jwtToken = authBox.get('jwt_token');
       
       if (jwtToken == null) {
         if (kDebugMode) {
@@ -419,9 +422,9 @@ class NotificationService {
     Map<String, dynamic>? data,
   }) async {
     try {
-      // Get JWT token from storage
-      final prefs = await SharedPreferences.getInstance();
-      final jwtToken = prefs.getString('jwt_token');
+      // Get JWT token from Hive
+      final Box<dynamic> authBox = await Hive.openBox('fitstart_auth');
+      final jwtToken = authBox.get('jwt_token');
 
       if (jwtToken == null) {
         if (kDebugMode) {

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:FitStart/modules/auth/auth_view.dart';
+import 'package:FitStart/modules/auth/google_auth_view.dart';
 import 'package:FitStart/modules/onboarding/onboarding_view.dart';
 import 'package:FitStart/modules/root/root_view.dart';
 import 'package:FitStart/services/api_service.dart';
@@ -151,7 +151,7 @@ class AuthViewModel extends ChangeNotifier {
       await GoogleAuthService.signOut(); // Also sign out from Google
       if (!context.mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const AuthView()),
+        MaterialPageRoute(builder: (context) => const GoogleAuthView()),
         (route) => false,
       );
     } catch (e) {

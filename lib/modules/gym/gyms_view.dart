@@ -4,6 +4,7 @@ import 'package:FitStart/model/gym.dart';
 import 'package:FitStart/components/gym_card.dart';
 import 'package:FitStart/theme.dart';
 import 'package:FitStart/utils/gym_data.dart';
+import 'package:FitStart/services/enhanced_cache_service.dart';
 
 class GymsView extends StatefulWidget {
   const GymsView({Key? key}) : super(key: key);
@@ -12,7 +13,8 @@ class GymsView extends StatefulWidget {
   State<GymsView> createState() => _GymsViewState();
 }
 
-class _GymsViewState extends State<GymsView> {
+class _GymsViewState extends State<GymsView> with AutomaticKeepAliveClientMixin {
+  List<Gym> _allGyms = [];
   List<Gym> _displayedGyms = [];
   String _selectedType = 'All';
   String _sortBy = 'Default';
@@ -25,15 +27,51 @@ class _GymsViewState extends State<GymsView> {
     'Yoga',
     'Functional',
   ];
+  
+  @override
+  bool get wantKeepAlive => true; // Keep state alive when switching tabs
 
   @override
   void initState() {
     super.initState();
-    _displayedGyms = List<Gym>.from(gymList);
+    _loadGymsWithCache();
+  }
+  
+  /// Load gyms with cache-first strategy
+  Future<void> _loadGymsWithCache() async {
+    // Try to load from cache first (instant)
+    final cached = await EnhancedCacheService.getGyms();
+    if (cached != null && cached.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _allGyms = cached;
+          _displayedGyms = List<Gym>.from(cached);
+        });
+      }
+      // Refresh in background
+      _refreshGymsInBackground();
+    } else {
+      // No cache, load from local data
+      if (mounted) {
+        setState(() {
+          _allGyms = List<Gym>.from(gymList);
+          _displayedGyms = List<Gym>.from(gymList);
+        });
+      }
+      // Cache the data
+      await EnhancedCacheService.cacheGyms(gymList);
+    }
+  }
+  
+  /// Refresh gyms in background
+  Future<void> _refreshGymsInBackground() async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    // In production, fetch from API here
+    await EnhancedCacheService.cacheGyms(gymList);
   }
 
   void _applyFilters() {
-    List<Gym> filtered = List<Gym>.from(gymList);
+    List<Gym> filtered = List<Gym>.from(_allGyms);
 
     // Filter by type
     if (_selectedType != 'All') {
@@ -56,6 +94,7 @@ class _GymsViewState extends State<GymsView> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
