@@ -12,11 +12,13 @@ import 'package:FitStart/core/cache/cache_manager.dart';
 import 'package:FitStart/services/favorites_service.dart';
 import 'package:FitStart/utils/location_service.dart';
 import 'package:FitStart/services/notification_service.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // Global navigation key
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
+  await dotenv.load();
   WidgetsFlutterBinding.ensureInitialized();
   
   // Initialize Firebase

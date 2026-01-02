@@ -1,14 +1,14 @@
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:FitStart/model/chat_message.dart';
 import 'package:FitStart/utils/dummy_data.dart';
 
 class GeminiChatbotService {
   // TODO: For production, use --dart-define to pass API key securely
   // Example: flutter run --dart-define=GEMINI_API_KEY=your_key_here
-  static const String _apiKey = String.fromEnvironment(
-    'GEMINI_API_KEY',
-    defaultValue: 'AIzaSyBp5aJciRGU2SLA6Xnojn7xD7tzlgtRUpw',
-  );
+  static String get _apiKey => dotenv.env['GEMINI_API_KEY'] ?? '';
+  
+  // The API key is loaded securely from .env using flutter_dotenv.
   late final GenerativeModel _model;
   late final ChatSession _chat;
 
