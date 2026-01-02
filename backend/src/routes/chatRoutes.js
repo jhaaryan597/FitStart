@@ -13,7 +13,7 @@ const router = express.Router();
  */
 router.post(
   '/conversations',
-  auth,
+  auth.protect,  // ✅ Changed from auth to auth.protect
   [
     body('venueId').trim().notEmpty().withMessage('Venue ID is required'),
     body('venueType').trim().notEmpty().withMessage('Venue type is required'),
@@ -28,7 +28,7 @@ router.post(
       }
 
       const { venueId, venueType, venueName, venueEmail, initialMessage } = req.body;
-      const userEmail = req.user.email;
+      const userEmail = req.user. email;
 
       // Check if conversation already exists
       let conversation = await Conversation.findOne({
@@ -52,7 +52,7 @@ router.post(
         venueName,
         venueEmail,
         userEmail,
-        userName: userEmail.split('@')[0],
+        userName:  userEmail.split('@')[0],
         lastMessage: initialMessage || '',
         lastMessageTime: new Date(),
       });
@@ -66,7 +66,7 @@ router.post(
           message: initialMessage,
           sender: 'user',
           senderEmail: userEmail,
-          senderName: userEmail.split('@')[0],
+          senderName: userEmail. split('@')[0],
         });
 
         await message.save();
@@ -87,7 +87,7 @@ router.post(
       console.error('❌ Error starting conversation:', error);
       res.status(500).json({
         success: false,
-        error: error.message,
+        error: error. message,
       });
     }
   }
@@ -98,17 +98,17 @@ router.post(
  * POST /api/v1/chat/conversations/:conversationId/messages
  * Send a message in a conversation
  */
-router.post(
+router. post(
   '/conversations/:conversationId/messages',
-  auth,
+  auth.protect,  // ✅ Changed from auth to auth.protect
   [
     body('message').trim().notEmpty().withMessage('Message cannot be empty'),
   ],
   async (req, res) => {
     try {
       const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ success: false, errors: errors.array() });
+      if (!errors. isEmpty()) {
+        return res. status(400).json({ success: false, errors: errors.array() });
       }
 
       const { conversationId } = req.params;
@@ -133,13 +133,13 @@ router.post(
       }
 
       // Create message
-      const isVenueOwner = conversation.venueEmail === userEmail;
+      const isVenueOwner = conversation. venueEmail === userEmail;
       const newMessage = new Message({
         conversationId,
         message,
         sender: isVenueOwner ? 'venue' : 'user',
         senderEmail: userEmail,
-        senderName: userEmail.split('@')[0],
+        senderName: userEmail. split('@')[0],
       });
 
       await newMessage.save();
@@ -153,7 +153,7 @@ router.post(
       res.status(201).json({
         success: true,
         data: newMessage,
-        message: 'Message sent successfully',
+        message:  'Message sent successfully',
       });
     } catch (error) {
       console.error('❌ Error sending message:', error);
@@ -170,9 +170,9 @@ router.post(
  * GET /api/v1/chat/conversations/user
  * Get all conversations for current user (as customer)
  */
-router.get('/conversations/user', auth, async (req, res) => {
+router.get('/conversations/user', auth.protect, async (req, res) => {  // ✅ Changed from auth to auth.protect
   try {
-    const userEmail = req.user.email;
+    const userEmail = req. user.email;
 
     const conversations = await Conversation.find({
       userEmail,
@@ -198,9 +198,9 @@ router.get('/conversations/user', auth, async (req, res) => {
  * GET /api/v1/chat/conversations/owner
  * Get all conversations for current user (as venue owner)
  */
-router.get('/conversations/owner', auth, async (req, res) => {
+router.get('/conversations/owner', auth.protect, async (req, res) => {  // ✅ Changed from auth to auth. protect
   try {
-    const ownerEmail = req.user.email;
+    const ownerEmail = req.user. email;
 
     // Find conversations where this user is the venue owner
     const conversations = await Conversation.find({
@@ -227,7 +227,7 @@ router.get('/conversations/owner', auth, async (req, res) => {
  * GET /api/v1/chat/conversations/:conversationId
  * Get a specific conversation with all messages
  */
-router.get('/conversations/:conversationId', auth, async (req, res) => {
+router.get('/conversations/:conversationId', auth.protect, async (req, res) => {  // ✅ Changed from auth to auth.protect
   try {
     const { conversationId } = req.params;
     const userEmail = req.user.email;
@@ -243,7 +243,7 @@ router.get('/conversations/:conversationId', auth, async (req, res) => {
 
     // Verify user is part of conversation
     if (
-      conversation.userEmail !== userEmail &&
+      conversation. userEmail !== userEmail &&
       conversation.venueEmail !== userEmail
     ) {
       return res.status(403).json({
@@ -254,7 +254,7 @@ router.get('/conversations/:conversationId', auth, async (req, res) => {
 
     res.json({
       success: true,
-      data: conversation,
+      data:  conversation,
     });
   } catch (error) {
     console.error('❌ Error fetching conversation:', error);
@@ -267,14 +267,14 @@ router.get('/conversations/:conversationId', auth, async (req, res) => {
 
 // ==================== MARK AS READ ====================
 /**
- * PUT /api/v1/chat/conversations/:conversationId/read
+ * PUT /api/v1/chat/conversations/: conversationId/read
  * Mark conversation as read
  */
-router.put('/conversations/:conversationId/read', auth, async (req, res) => {
+router.put('/conversations/:conversationId/read', auth.protect, async (req, res) => {  // ✅ Changed from auth to auth.protect
   try {
     const { conversationId } = req.params;
 
-    const conversation = await Conversation.findByIdAndUpdate(
+    const conversation = await Conversation. findByIdAndUpdate(
       conversationId,
       { unreadCount: 0 },
       { new: true }
