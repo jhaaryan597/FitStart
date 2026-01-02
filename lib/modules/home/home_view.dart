@@ -507,40 +507,6 @@ class _HomeViewState extends State<HomeView>
     }
   }
 
-  void _showLocationDialog() {
-    final TextEditingController addressController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Enter Your Location"),
-          content: TextField(
-            controller: addressController,
-            decoration: const InputDecoration(
-              hintText: "Enter your address",
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _getCurrentLocation();
-              },
-              child: const Text("Use Current Location"),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _getCurrentLocation(address: addressController.text);
-              },
-              child: const Text("Set Location"),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   Widget _buildHeader(BuildContext context) {
     return Container(
       color: backgroundColor,
@@ -629,7 +595,8 @@ class _HomeViewState extends State<HomeView>
           SizedBox(height: ResponsiveUtils.spacing(context, 8)),
           LocationDisplay(
             address: _currentAddress,
-            onTap: _showLocationDialog,
+            onTap: () => _getCurrentLocation(),
+            onLocationSubmitted: (address) => _getCurrentLocation(address: address),
             showSetLocationPrompt: _currentAddress == null,
           ),
         ],

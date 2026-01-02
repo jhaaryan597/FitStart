@@ -230,34 +230,50 @@ class SettingsView extends StatelessWidget {
             TextButton(
               onPressed: () async {
                 try {
-                  // TODO: Backend endpoint for account deletion needs to be created
-                  // await ApiService.deleteAccount();
+                  // Call the actual delete account API
+                  final result = await ApiService.deleteAccount();
 
                   if (!dialogContext.mounted) return;
                   Navigator.of(dialogContext).pop(); // Close the dialog
 
-                  // For now, just logout since backend endpoint not ready
-                  await ApiService.logout();
+                  if (result['success']) {
+                    // Clear chat cache before account deletion
+                    await LocalChatService.clearAllConversations();
 
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (context) => const GoogleAuthView()),
-                    (route) => false,
-                  );
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Logged out (account deletion endpoint needed).'),
-                      backgroundColor: Colors.orange,
-                    ),
-                  );
+                    // Navigate back to auth screen
+                    if (context.mounted) {
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (context) => const GoogleAuthView()),
+                        (route) => false,
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Account deleted successfully'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  } else {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to delete account: ${result['error']}'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
                 } catch (e) {
                   if (!dialogContext.mounted) return;
                   Navigator.of(dialogContext).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Failed to logout: ${e}'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to delete account: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
                 }
               },
               child: Text(

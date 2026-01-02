@@ -210,7 +210,12 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       await authBox.delete('jwt_token');
       await authBox.delete('user_data');
       await authBox.delete('last_login');
-      
+
+      // Reset onboarding and guest mode flags so user sees onboarding again
+      final settingsBox = await Hive.openBox('settings');
+      await settingsBox.delete('onboarding_complete');
+      await settingsBox.delete('guest_mode');
+
       // Sign out from Google to clear cached account
       await GoogleAuthService.signOut();
     }

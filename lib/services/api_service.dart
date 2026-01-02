@@ -197,6 +197,28 @@ class ApiService {
     }
   }
 
+  /// Delete user account
+  static Future<Map<String, dynamic>> deleteAccount() async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/auth/me'),
+        headers: await _getHeaders(),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        // Remove JWT token after successful deletion
+        await _removeToken();
+        return {'success': true, 'message': data['message'] ?? 'Account deleted successfully'};
+      } else {
+        return {'success': false, 'error': data['message'] ?? 'Failed to delete account'};
+      }
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
   /// Update FCM token
   static Future<bool> updateFCMToken(String fcmToken) async {
     try {

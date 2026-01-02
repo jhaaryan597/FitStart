@@ -7,6 +7,7 @@ import 'package:FitStart/modules/transaction/transaction_history_view.dart';
 import 'package:FitStart/modules/gym/gyms_view.dart';
 import 'package:FitStart/theme.dart';
 import 'package:FitStart/components/floating_chatbot.dart';
+import 'package:FitStart/utils/responsive_utils.dart';
 
 class RootView extends StatefulWidget {
   final int currentScreen;
@@ -38,7 +39,7 @@ class _RootViewState extends State<RootView> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async => await _onBackPressed(),
-      child: Scaffold(
+      child: ResponsiveScaffold(
         appBar: AppBar(
           elevation: 0,
           toolbarHeight: 0,
@@ -153,7 +154,7 @@ class _CustomBottomNavBarState extends State<CustomBottomNavBar> {
     final indicatorWidth = 40.0;
     final indicatorLeft = (_selectedIndex * itemWidth) + (itemWidth / 2) - (indicatorWidth / 2);
     
-    return SafeArea(
+    return ResponsiveSafeArea(
       child: GestureDetector(
         onHorizontalDragEnd: (details) {
           // Get the last known position from the drag

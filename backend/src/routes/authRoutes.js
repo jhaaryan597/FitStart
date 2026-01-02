@@ -8,6 +8,7 @@ const {
   updatePassword,
   registerFCMToken,
   removeFCMToken,
+  deleteAccount,
 } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 const { body } = require('express-validator');
@@ -43,5 +44,6 @@ router.put('/update', protect, updateDetails);
 router.put('/updatepassword', protect, updatePassword);
 router.post('/fcm-token', protect, registerFCMToken);
 router.delete('/fcm-token', protect, removeFCMToken);
+router.delete('/me', protect, deleteAccount);
 
 module.exports = router;

@@ -8,6 +8,7 @@ import 'package:FitStart/services/booking_availability_service.dart';
 import 'package:FitStart/services/guest_mode_service.dart';
 import 'package:FitStart/model/field_order.dart';
 import 'package:FitStart/model/sport_field.dart';
+import 'package:FitStart/utils/responsive_utils.dart';
 import 'package:FitStart/modules/root/root_view.dart';
 import 'package:FitStart/theme.dart';
 import 'package:FitStart/utils/dummy_data.dart';
@@ -532,7 +533,12 @@ class _BookingViewState extends State<BookingView> {
                               ),
                               // const SizedBox(height: 16),
                               GridView.count(
-                                crossAxisCount: 6,
+                                crossAxisCount: ResponsiveUtils.gridCrossAxisCount(
+                                  context,
+                                  mobile: 4,
+                                  tablet: 6,
+                                  desktop: 8,
+                                ),
                                 shrinkWrap: true,
                                 physics: const NeverScrollableScrollPhysics(),
                                 crossAxisSpacing: 8,

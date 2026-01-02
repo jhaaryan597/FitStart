@@ -307,3 +307,29 @@ exports.removeFCMToken = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Delete user account
+// @route   DELETE /api/v1/auth/me
+// @access  Private
+exports.deleteAccount = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    // Delete the user account
+    await User.findByIdAndDelete(req.user.id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Account deleted successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+};

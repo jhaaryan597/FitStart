@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Responsive utility class to handle different screen sizes
+/// Responsive utility class to handle different screen sizes and orientations
 /// Breakpoints: Mobile (<600), Tablet (600-1024), Desktop (>1024)
 class ResponsiveUtils {
   static const double mobileBreakpoint = 600;
@@ -14,6 +14,21 @@ class ResponsiveUtils {
   /// Get screen height
   static double height(BuildContext context) {
     return MediaQuery.of(context).size.height;
+  }
+
+  /// Get screen size
+  static Size size(BuildContext context) {
+    return MediaQuery.of(context).size;
+  }
+
+  /// Check if device is in landscape mode
+  static bool isLandscape(BuildContext context) {
+    return MediaQuery.of(context).orientation == Orientation.landscape;
+  }
+
+  /// Check if device is in portrait mode
+  static bool isPortrait(BuildContext context) {
+    return MediaQuery.of(context).orientation == Orientation.portrait;
   }
 
   /// Check if device is mobile
@@ -48,26 +63,52 @@ class ResponsiveUtils {
     return mobile;
   }
 
+  /// Get responsive value based on orientation
+  static T orientation<T>({
+    required BuildContext context,
+    required T portrait,
+    T? landscape,
+  }) {
+    if (isLandscape(context) && landscape != null) {
+      return landscape;
+    }
+    return portrait;
+  }
+
   /// Get responsive font size
   static double fontSize(BuildContext context, double size) {
+    double multiplier = 1.0;
+
     if (isDesktop(context)) {
-      return size * 1.2;
+      multiplier = 1.2;
+    } else if (isTablet(context)) {
+      multiplier = 1.1;
     }
-    if (isTablet(context)) {
-      return size * 1.1;
+
+    // Adjust for landscape mode on mobile
+    if (isMobile(context) && isLandscape(context)) {
+      multiplier *= 0.9;
     }
-    return size;
+
+    return size * multiplier;
   }
 
   /// Get responsive spacing
   static double spacing(BuildContext context, double space) {
+    double multiplier = 1.0;
+
     if (isDesktop(context)) {
-      return space * 1.5;
+      multiplier = 1.5;
+    } else if (isTablet(context)) {
+      multiplier = 1.25;
     }
-    if (isTablet(context)) {
-      return space * 1.25;
+
+    // Adjust for landscape mode
+    if (isLandscape(context) && isMobile(context)) {
+      multiplier *= 0.8;
     }
-    return space;
+
+    return space * multiplier;
   }
 
   /// Get responsive padding
@@ -81,8 +122,18 @@ class ResponsiveUtils {
     double? right,
     double? bottom,
   }) {
-    final multiplier =
-        isDesktop(context) ? 1.5 : (isTablet(context) ? 1.25 : 1.0);
+    double multiplier = 1.0;
+
+    if (isDesktop(context)) {
+      multiplier = 1.5;
+    } else if (isTablet(context)) {
+      multiplier = 1.25;
+    }
+
+    // Adjust for landscape mode
+    if (isLandscape(context) && isMobile(context)) {
+      multiplier *= 0.8;
+    }
 
     if (all != null) {
       return EdgeInsets.all(all * multiplier);
@@ -132,9 +183,19 @@ class ResponsiveUtils {
       desktop: 1200,
     );
   }
-}
 
-/// Responsive builder widget
+  /// Get safe area adjusted height
+  static double safeHeight(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    return mediaQuery.size.height - mediaQuery.padding.top - mediaQuery.padding.bottom;
+  }
+
+  /// Get safe area adjusted width
+  static double safeWidth(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    return mediaQuery.size.width - mediaQuery.padding.left - mediaQuery.padding.right;
+  }
+}
 class ResponsiveBuilder extends StatelessWidget {
   final Widget Function(BuildContext context, BoxConstraints constraints)
       mobile;
@@ -252,5 +313,118 @@ class ResponsiveSpacing extends StatelessWidget {
       width: axis == Axis.horizontal ? spacing : 0,
       height: axis == Axis.vertical ? spacing : 0,
     );
+  }
+}
+
+/// Responsive SafeArea wrapper that handles all orientations properly
+class ResponsiveSafeArea extends StatelessWidget {
+  final Widget child;
+  final bool top;
+  final bool bottom;
+  final bool left;
+  final bool right;
+  final EdgeInsets minimum;
+  final bool maintainBottomViewPadding;
+
+  const ResponsiveSafeArea({
+    Key? key,
+    required this.child,
+    this.top = true,
+    this.bottom = true,
+    this.left = true,
+    this.right = true,
+    this.minimum = EdgeInsets.zero,
+    this.maintainBottomViewPadding = false,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    // In landscape mode, we need to handle left/right insets as well
+    final isLandscape = ResponsiveUtils.isLandscape(context);
+
+    return SafeArea(
+      top: top,
+      bottom: bottom,
+      left: isLandscape ? left : false, // Only apply left/right in landscape
+      right: isLandscape ? right : false,
+      minimum: minimum,
+      maintainBottomViewPadding: maintainBottomViewPadding,
+      child: child,
+    );
+  }
+}
+
+/// Responsive Scaffold that handles SafeArea and orientation changes
+class ResponsiveScaffold extends StatelessWidget {
+  final PreferredSizeWidget? appBar;
+  final Widget? body;
+  final Widget? floatingActionButton;
+  final FloatingActionButtonLocation? floatingActionButtonLocation;
+  final Widget? bottomNavigationBar;
+  final Widget? bottomSheet;
+  final Color? backgroundColor;
+  final bool? resizeToAvoidBottomInset;
+  final bool extendBody;
+  final bool extendBodyBehindAppBar;
+  final bool useSafeArea;
+
+  const ResponsiveScaffold({
+    Key? key,
+    this.appBar,
+    this.body,
+    this.floatingActionButton,
+    this.floatingActionButtonLocation,
+    this.bottomNavigationBar,
+    this.bottomSheet,
+    this.backgroundColor,
+    this.resizeToAvoidBottomInset,
+    this.extendBody = false,
+    this.extendBodyBehindAppBar = false,
+    this.useSafeArea = true,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    Widget scaffold = Scaffold(
+      appBar: appBar,
+      body: body,
+      floatingActionButton: floatingActionButton,
+      floatingActionButtonLocation: floatingActionButtonLocation,
+      bottomNavigationBar: bottomNavigationBar,
+      bottomSheet: bottomSheet,
+      backgroundColor: backgroundColor,
+      resizeToAvoidBottomInset: resizeToAvoidBottomInset,
+      extendBody: extendBody,
+      extendBodyBehindAppBar: extendBodyBehindAppBar,
+    );
+
+    // Wrap with ResponsiveSafeArea if requested
+    if (useSafeArea) {
+      scaffold = ResponsiveSafeArea(
+        child: scaffold,
+      );
+    }
+
+    return scaffold;
+  }
+}
+
+/// Orientation-aware responsive container
+class OrientationResponsive extends StatelessWidget {
+  final Widget portrait;
+  final Widget? landscape;
+
+  const OrientationResponsive({
+    Key? key,
+    required this.portrait,
+    this.landscape,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    if (ResponsiveUtils.isLandscape(context) && landscape != null) {
+      return landscape!;
+    }
+    return portrait;
   }
 }
