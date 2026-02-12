@@ -11,11 +11,13 @@ class OrderView extends StatefulWidget {
   State<OrderView> createState() => _OrderViewState();
 }
 
-class _OrderViewState extends State<OrderView> with AutomaticKeepAliveClientMixin {
+class _OrderViewState extends State<OrderView>
+    with AutomaticKeepAliveClientMixin {
   List<Map<String, dynamic>> _orders = [];
   bool _isLoading = true;
+  bool _isLoadingData = false; // Prevent multiple simultaneous loads
   String _selectedFilter = 'All';
-  
+
   @override
   bool get wantKeepAlive => false; // Don't keep alive to ensure fresh data
 
@@ -24,14 +26,14 @@ class _OrderViewState extends State<OrderView> with AutomaticKeepAliveClientMixi
     super.initState();
     _loadOrders();
   }
-  
+
   @override
   void didUpdateWidget(OrderView oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Reload when widget updates
     _loadOrders();
   }
-  
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -42,58 +44,108 @@ class _OrderViewState extends State<OrderView> with AutomaticKeepAliveClientMixi
   }
 
   Future<void> _loadOrders() async {
-    if (!mounted) return;
-    
-    setState(() => _isLoading = true);
+    if (!mounted || _isLoadingData)
+      return; // Prevent multiple simultaneous loads
+
+    setState(() {
+      _isLoadingData = true;
+      _isLoading = true;
+    });
 
     try {
       // Use LocalBookingService with fallback to demo data
       final result = await LocalBookingService.getBookingsWithFallback();
-      
+
       if (result['success'] == true && mounted) {
         final List<dynamic> rawOrders = result['data'] ?? [];
-        
-        // Normalize data to match expected format
-        final normalizedOrders = rawOrders.map((order) {
+
+        // Normalize data and filter for upcoming bookings only
+        final today = DateTime.now();
+        final todayDateStr =
+            '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+        final normalizedOrders = rawOrders.where((order) {
+          // Filter for upcoming bookings (booking date >= today)
+          final bookingDate = order['bookingDate'] ?? order['booking_date'];
+          if (bookingDate == null) return false;
+          return bookingDate.compareTo(todayDateStr) >= 0;
+        }).map((order) {
           // Handle both old (Supabase) and new (MongoDB) formats
+          final bookingType = order['bookingType'] ?? 'sport_booking';
+          final isGymBooking = bookingType == 'gym_membership';
+          
           return {
             'id': order['_id'] ?? order['id'],
-            'venue_name': order['venue']?['name'] ?? order['venue_name'] ?? 'Unknown Venue',
-            'venue_id': order['venue']?['_id'] ?? order['venue']?['id'] ?? order['venue_id'],
-            'venue_type': order['venue']?['type'] ?? order['venue_type'] ?? 'Sport',
+            'venue_name': isGymBooking
+                ? (order['gymName'] ?? 'Unknown Gym')
+                : (order['venue']?['name'] ??
+                    order['venue_name'] ??
+                    'Unknown Venue'),
+            'venue_id': order['venue']?['_id'] ??
+                order['venue']?['id'] ??
+                order['venue_id'],
+            'venue_type':
+                order['venue']?['type'] ?? order['venue_type'] ?? 'Sport',
             'booking_date': order['bookingDate'] ?? order['booking_date'],
-            'booking_times': order['timeSlots'] != null 
-                ? (order['timeSlots'] as List).map((slot) => '${slot['startTime']} - ${slot['endTime']}').toList()
+            'booking_times': order['timeSlots'] != null
+                ? (order['timeSlots'] as List)
+                    .map((slot) => '${slot['startTime']} - ${slot['endTime']}')
+                    .toList()
                 : (order['booking_times'] ?? []),
-            'total_amount': order['pricing']?['totalAmount']?.toInt() ?? order['total_amount'] ?? 0,
+            'total_amount': isGymBooking
+                ? (order['totalAmount'] ?? 0)
+                : (order['pricing']?['totalAmount']?.toInt() ??
+                    order['total_amount'] ??
+                    0),
             'payment_status': _mapPaymentStatus(order),
-            'payment_method': order['payment']?['method'] ?? order['payment_method'] ?? 'unknown',
-            'booking_status': order['bookingStatus'] ?? order['booking_status'] ?? 'pending',
-            'created_at': order['createdAt'] ?? order['created_at'] ?? DateTime.now().toIso8601String(),
-            'venue_address': order['venue']?['address'] ?? order['venue_address'] ?? '',
-            'venue_phone': order['venue']?['phoneNumber'] ?? order['venue_phone'] ?? '',
-            'razorpay_payment_id': order['payment']?['paymentId'] ?? order['razorpay_payment_id'],
+            'payment_method': order['payment']?['method'] ??
+                order['payment_method'] ??
+                'unknown',
+            'booking_status':
+                order['bookingStatus'] ?? order['booking_status'] ?? 'pending',
+            'created_at': order['createdAt'] ??
+                order['created_at'] ??
+                DateTime.now().toIso8601String(),
+            'venue_address':
+                order['venue']?['address'] ?? order['venue_address'] ?? '',
+            'venue_phone':
+                order['venue']?['phoneNumber'] ?? order['venue_phone'] ?? '',
+            'razorpay_payment_id':
+                order['payment']?['paymentId'] ?? order['razorpay_payment_id'],
+            'booking_type': bookingType,
           };
         }).toList();
-        
+
         setState(() {
           _orders = normalizedOrders;
           _isLoading = false;
+          _isLoadingData = false;
         });
       } else {
-        if (mounted) setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _isLoadingData = false;
+          });
+        }
       }
     } catch (e) {
       print('Error loading orders: $e');
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isLoadingData = false;
+        });
+      }
     }
   }
-  
+
   String _mapPaymentStatus(Map<String, dynamic> order) {
     // Handle both formats
-    final paymentStatus = order['payment']?['status'] ?? order['payment_status'];
+    final paymentStatus =
+        order['payment']?['status'] ?? order['payment_status'];
     final bookingStatus = order['bookingStatus'] ?? order['booking_status'];
-    
+
     if (paymentStatus == 'completed' || bookingStatus == 'confirmed') {
       return 'paid';
     } else if (paymentStatus == 'pending' && bookingStatus == 'pending') {
@@ -110,6 +162,109 @@ class _OrderViewState extends State<OrderView> with AutomaticKeepAliveClientMixi
             order['payment_status'] ==
             _selectedFilter.toLowerCase().replaceAll(' ', '_'))
         .toList();
+  }
+
+  Future<void> _deleteBooking(Map<String, dynamic> order) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Booking'),
+        content: Text(
+          'Are you sure you want to permanently delete this booking for ${order['venue_name']}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: errorColor),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await LocalBookingService.deleteBooking(order['id']);
+        await _loadOrders();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Booking deleted successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to delete booking: $e'),
+              backgroundColor: errorColor,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _cancelBooking(Map<String, dynamic> order) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel Booking'),
+        content: Text(
+          'Are you sure you want to cancel this booking for ${order['venue_name']}? It will remain visible in your history.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep Booking'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.orange),
+            child: const Text('Cancel Booking'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        // Mark booking as Cancelled without deleting
+        order['bookingStatus'] = 'Cancelled';
+        order['paymentStatus'] = 'Cancelled';
+        order['booking_status'] = 'Cancelled';
+        order['payment_status'] = 'Cancelled';
+        await LocalBookingService.saveBooking(order);
+
+        // Reload orders
+        await _loadOrders();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Booking cancelled successfully'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to cancel booking: $e'),
+              backgroundColor: errorColor,
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -154,7 +309,10 @@ class _OrderViewState extends State<OrderView> with AutomaticKeepAliveClientMixi
                     : RefreshIndicator(
                         onRefresh: _loadOrders,
                         child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.only(
+                              left: 16,
+                              right: 16,
+                              bottom: 120), // Space for floating nav bar
                           itemCount: _filteredOrders.length,
                           itemBuilder: (BuildContext context, int index) {
                             final order = _filteredOrders[index];
@@ -255,24 +413,26 @@ class _OrderViewState extends State<OrderView> with AutomaticKeepAliveClientMixi
                 ],
               ),
               const SizedBox(height: 8),
-              // Time Slots
-              Row(
-                children: [
-                  Icon(Icons.access_time, size: 16, color: textSecondary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      bookingTimes.join(', '),
-                      style: normalTextStyle.copyWith(
-                        color: textSecondary,
-                        fontSize: 14,
+              // Time Slots (only for non-gym bookings)
+              if (order['booking_type'] != 'gym_membership' &&
+                  bookingTimes.isNotEmpty)
+                Row(
+                  children: [
+                    Icon(Icons.access_time, size: 16, color: textSecondary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        bookingTimes.join(', '),
+                        style: normalTextStyle.copyWith(
+                          color: textSecondary,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
               const SizedBox(height: 12),
               // Divider
               Divider(color: neutral200, height: 1),
@@ -295,13 +455,44 @@ class _OrderViewState extends State<OrderView> with AutomaticKeepAliveClientMixi
                       ),
                     ],
                   ),
-                  Text(
-                    _formatDate(createdAt),
-                    style: descTextStyle.copyWith(
-                      fontSize: 12,
-                      color: textSecondary,
+                  if (paymentStatus == 'pending' ||
+                      paymentStatus == 'pay_at_venue')
+                    ElevatedButton(
+                      onPressed: () => _cancelBooking(order),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: errorColor,
+                        foregroundColor: colorWhite,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text('Cancel'),
+                    )
+                  else if (paymentStatus == 'Cancelled' ||
+                           paymentStatus == 'failed')
+                    ElevatedButton(
+                      onPressed: () => _deleteBooking(order),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: errorColor,
+                        foregroundColor: colorWhite,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text('Delete'),
+                    )
+                  else
+                    Text(
+                      _formatDate(createdAt),
+                      style: descTextStyle.copyWith(
+                        fontSize: 12,
+                        color: textSecondary,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ],
@@ -321,6 +512,8 @@ class _OrderViewState extends State<OrderView> with AutomaticKeepAliveClientMixi
         return skyBlue;
       case 'failed':
         return errorColor;
+      case 'Cancelled':
+        return warningColor;
       default:
         return neutral400;
     }
@@ -336,6 +529,8 @@ class _OrderViewState extends State<OrderView> with AutomaticKeepAliveClientMixi
         return 'Pending';
       case 'failed':
         return 'Failed';
+      case 'Cancelled':
+        return 'Cancelled';
       default:
         return status;
     }
@@ -394,7 +589,9 @@ class _OrderViewState extends State<OrderView> with AutomaticKeepAliveClientMixi
             _buildDetailRow('Venue', order['venue_name']),
             _buildDetailRow('Type', order['venue_type']),
             _buildDetailRow('Booking Date', order['booking_date']),
-            _buildDetailRow('Time Slots', bookingTimes.join(', ')),
+            if (order['booking_type'] != 'gym_membership' &&
+                bookingTimes.isNotEmpty)
+              _buildDetailRow('Time Slots', bookingTimes.join(', ')),
             _buildDetailRow('Total Amount', '₹${order['total_amount']}'),
             _buildDetailRow('Payment Status', _getStatusLabel(paymentStatus)),
             if (paymentMethod != null)

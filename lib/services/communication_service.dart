@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:FitStart/modules/chat/chat_view.dart';
 
 /// Service for handling communication actions like WhatsApp chat and phone calls
 class CommunicationService {
@@ -40,39 +39,6 @@ class CommunicationService {
       }
     } catch (e) {
       throw 'Failed to open WhatsApp: $e';
-    }
-  }
-  
-  /// Open internal chat with venue owner
-  /// 
-  /// [venueId] unique identifier for the venue
-  /// [venueType] should be 'gym' or 'sports_venue'
-  /// [venueName] display name of the venue
-  /// [venueEmail] email address of the venue for chat
-  /// [initialMessage] optional first message to send
-  static Future<void> openInternalChat({
-    required BuildContext context,
-    required String venueId,
-    required String venueType,
-    required String venueName,
-    String? venueEmail,
-    String? initialMessage,
-  }) async {
-    try {
-      // Navigate to chat view directly - ChatView handles auth internally
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => ChatView(
-            venueId: venueId,
-            venueType: venueType,
-            venueName: venueName,
-            venueEmail: venueEmail,
-            initialMessage: initialMessage,
-          ),
-        ),
-      );
-    } catch (e) {
-      throw 'Failed to open chat: $e';
     }
   }
   
@@ -189,43 +155,6 @@ class CommunicationService {
                   ),
                 ),
                 const SizedBox(height: 20),
-                
-                // Internal Chat Option
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6C63FF),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.chat_bubble,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                  title: const Text('Chat in App'),
-                  subtitle: const Text('Private messaging without sharing your number'),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    try {
-                      String message = initialMessage ?? 
-                          'Hi! I\'m interested in $venueName. Could you please provide more information?';
-                      await openInternalChat(
-                        context: context,
-                        venueId: venueId,
-                        venueType: venueType,
-                        venueName: venueName,
-                        venueEmail: venueEmail,
-                        initialMessage: message,
-                      );
-                    } catch (e) {
-                      showErrorDialog(context, e.toString());
-                    }
-                  },
-                ),
-                
-                const SizedBox(height: 8),
                 
                 // WhatsApp Option
                 ListTile(
@@ -381,48 +310,6 @@ class CommunicationService {
               ),
             ),
           ],
-        ),
-        
-        const SizedBox(height: 8),
-        
-        // Second row: Internal Chat
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () async {
-              try {
-                String message = initialMessage ?? 
-                    'Hi! I\'m interested in $venueName. Could you please provide more information?';
-                await openInternalChat(
-                  context: context,
-                  venueId: venueId,
-                  venueType: venueType,
-                  venueName: venueName,
-                  initialMessage: message,
-                );
-              } catch (e) {
-                showErrorDialog(context, e.toString());
-              }
-            },
-            icon: Container(
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                color: const Color(0xFF6C63FF),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Icon(
-                Icons.chat_bubble,
-                color: Colors.white,
-                size: 16,
-              ),
-            ),
-            label: const Text('Chat in App (Private)'),
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Color(0xFF6C63FF)),
-              foregroundColor: const Color(0xFF6C63FF),
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            ),
-          ),
         ),
       ],
     );

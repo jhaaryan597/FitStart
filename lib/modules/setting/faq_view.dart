@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:FitStart/theme.dart';
 
 class FAQView extends StatefulWidget {
@@ -56,7 +57,7 @@ class _FAQViewState extends State<FAQView> {
     {
       'question': 'What if the venue is closed?',
       'answer':
-          'If a venue is temporarily closed:\n• You\'ll see a notice on the venue page\n• Existing bookings may be cancelled with full refund\n• Check back later or choose another venue\n\nFor permanent closures, we\'ll notify you via email if you have upcoming bookings.',
+          'If a venue is temporarily closed:\n• You\'ll see a notice on the venue page\n• Existing bookings may be Cancelled with full refund\n• Check back later or choose another venue\n\nFor permanent closures, we\'ll notify you via email if you have upcoming bookings.',
     },
     {
       'question': 'How do I contact the venue?',
@@ -284,8 +285,11 @@ class _FAQViewState extends State<FAQView> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).pop();
+                      onPressed: () async {
+                        final uri = Uri.parse('mailto:support@fitstart.com?subject=Support Request');
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri);
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),

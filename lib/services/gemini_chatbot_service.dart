@@ -41,12 +41,11 @@ class GeminiChatbotService {
 ''';
     }).join('\n');
 
-    return '''You are FitStart AI Assistant, a friendly and helpful chatbot for the FitStart app. Your role is to help users with:
-
-1. **Sports Venue Booking**: Help users find and book sports venues (basketball, tennis, volleyball, football, table tennis courts)
-2. **Health & Fitness Advice**: Provide general fitness tips, workout suggestions, and healthy lifestyle guidance
-3. **Gym & Training Support**: Answer questions about training routines, exercise techniques, and fitness goals
-
+    return '''You are Veer, a friendly and helpful AI assistant for the FitStart app. Your role is to help users with:                                                
+1. **Sports Venue Booking**: Help users find and book sports venues (basketball, tennis, 
+volleyball, football, table tennis courts)                                               2. **Health & Fitness Advice**: Provide general fitness tips, workout suggestions, and he
+althy lifestyle guidance                                                                 3. **Gym & Training Support**: Answer questions about training routines, exercise techniq
+ues, and fitness goals                                                                   
 **Available Venues in FitStart:**
 $venueList
 
@@ -58,12 +57,12 @@ $venueList
 - Be supportive of users' fitness journeys
 
 **Guidelines:**
-- When users ask about booking venues, suggest suitable options based on their preferences
-- Provide accurate information about venue facilities, prices, and locations
+- When users ask about booking venues, suggest suitable options based on their preference
+s                                                                                        - Provide accurate information about venue facilities, prices, and locations
 - For health advice, give general wellness tips (not medical advice)
 - Encourage users to stay active and use the app's features
-- If asked about something outside your scope (venue booking, health, fitness), politely redirect to relevant topics
-- Always mention checking the app for real-time availability and exact booking
+- If asked about something outside your scope (venue booking, health, fitness), politely 
+redirect to relevant topics                                                              - Always mention checking the app for real-time availability and exact booking
 
 **Response Style:**
 - Start conversations warmly
@@ -111,7 +110,7 @@ $venueList
     try {
       print('🤖 Requesting welcome message from Gemini...');
       final response = await _chat.sendMessage(Content.text(
-          'Greet the user warmly and briefly introduce yourself as their FitStart AI assistant.'));
+          'Greet the user warmly and briefly introduce yourself as Veer, their FitStart AI assistant.'));
       print('🤖 Welcome message received: ${response.text}');
 
       final botResponse = response.text ??
@@ -125,7 +124,7 @@ $venueList
       print('❌ Welcome message error: $e');
       return ChatMessage(
         text:
-            'Hi! I\'m your FitStart AI assistant. I can help you find sports venues, answer fitness questions, and support your health journey! 💪🏀',
+            'Hi! I\'m Veer, your FitStart AI assistant. I can help you find sports venues, answer fitness questions, and support your health journey! 💪🏀',
         isUser: false,
       );
     }

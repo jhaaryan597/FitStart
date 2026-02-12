@@ -1,12 +1,13 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:FitStart/model/gym.dart';
 import 'package:FitStart/modules/root/root_view.dart';
+import 'package:FitStart/services/local_booking_service.dart';
 import 'package:FitStart/theme.dart';
 import 'package:FitStart/utils/razorpay_service.dart';
-import 'package:FitStart/services/ml_recommendation_service.dart';
 
 class GymMembershipView extends StatefulWidget {
   final Gym gym;
@@ -48,9 +49,6 @@ class _GymMembershipViewState extends State<GymMembershipView> {
     _razorpayService.onPaymentSuccess = _handlePaymentSuccess;
     _razorpayService.onPaymentError = _handlePaymentError;
     _razorpayService.onExternalWallet = _handleExternalWallet;
-
-    // Track gym view for ML recommendations
-    MLRecommendationService.trackGymView(widget.gym.id);
   }
 
   void _calculateTotalBill() {
@@ -132,16 +130,40 @@ class _GymMembershipViewState extends State<GymMembershipView> {
         );
       }
 
-      // TODO: Backend endpoint for gym membership needs to be created
-      // For now, just track for ML recommendations
-      print('Gym membership created: ${planData['label']} for ${widget.gym.name}');
-      print('Payment status: $paymentStatus, Method: $paymentMethod');
-      print('Valid from ${DateFormat('dd MMM yyyy').format(startDate)} to ${DateFormat('dd MMM yyyy').format(endDate)}');
+      // Save gym membership to local transactions
+      final bookingId = 'local_${DateTime.now().millisecondsSinceEpoch}';
+      final membership = {
+        '_id': bookingId,
+        'gymName': widget.gym.name,
+        'planType': _selectedPlan,
+        'planLabel': planData['label'],
+        'withTrainer': _withTrainer,
+        'totalAmount': _totalBill,
+        'startDate': DateFormat('yyyy-MM-dd').format(startDate),
+        'endDate': DateFormat('yyyy-MM-dd').format(endDate),
+        'bookingDate': DateFormat('yyyy-MM-dd').format(startDate),
+        'bookingStatus': paymentStatus,
+        'paymentStatus': paymentStatus,
+        'paymentMethod': paymentMethod,
+        'bookingType': 'gym_membership',
+      };
 
-      // Track gym membership for ML recommendations
-      MLRecommendationService.trackGymMembership(widget.gym.id);
+      // Add payment details if available
+      if (razorpayPaymentId != null) {
+        membership['paymentId'] = razorpayPaymentId;
+      }
+      if (razorpayOrderId != null) {
+        membership['razorpayOrderId'] = razorpayOrderId;
+      }
+      if (razorpaySignature != null) {
+        membership['razorpaySignature'] = razorpaySignature;
+      }
+
+      await LocalBookingService.saveBooking(membership);
+
+      // Gym membership saved to transactions
     } catch (e) {
-      print('Error saving membership: $e');
+      debugPrint('Error saving membership: $e');
     }
   }
 
@@ -180,7 +202,7 @@ class _GymMembershipViewState extends State<GymMembershipView> {
     if (mounted) {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => RootView(currentScreen: 1)),
+        MaterialPageRoute(builder: (context) => RootView(currentScreen: 2)),
         (route) => false,
       );
 

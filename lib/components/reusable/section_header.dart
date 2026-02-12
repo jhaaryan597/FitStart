@@ -31,45 +31,47 @@ class SectionHeader extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              if (icon != null) ...[
-                Icon(
-                  icon,
-                  color: primaryColor500,
-                  size: ResponsiveUtils.spacing(context, 20),
-                ),
-                SizedBox(width: ResponsiveUtils.spacing(context, 8)),
-              ],
-              Text(
-                title,
-                style: subTitleTextStyle.copyWith(
-                  fontSize: ResponsiveUtils.fontSize(context, 16),
-                ),
-              ),
-              if (badge != null) ...[
-                SizedBox(width: ResponsiveUtils.spacing(context, 8)),
-                Container(
-                  padding: ResponsiveUtils.padding(
-                    context,
-                    horizontal: 8,
-                    vertical: 4,
+          Expanded(
+            child: Row(
+              children: [
+                if (icon != null) ...[
+                  Icon(
+                    icon,
+                    color: primaryColor500,
+                    size: ResponsiveUtils.spacing(context, 20),
                   ),
-                  decoration: BoxDecoration(
-                    color: primaryColor500.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+                  SizedBox(width: ResponsiveUtils.spacing(context, 8)),
+                ],
+                Text(
+                  title,
+                  style: subTitleTextStyle.copyWith(
+                    fontSize: ResponsiveUtils.fontSize(context, 16),
                   ),
-                  child: Text(
-                    badge!,
-                    style: descTextStyle.copyWith(
-                      fontSize: ResponsiveUtils.fontSize(context, 10),
-                      fontWeight: FontWeight.bold,
-                      color: primaryColor500,
+                ),
+                if (badge != null) ...[
+                  SizedBox(width: ResponsiveUtils.spacing(context, 8)),
+                  Container(
+                    padding: ResponsiveUtils.padding(
+                      context,
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: primaryColor500.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      badge!,
+                      style: descTextStyle.copyWith(
+                        fontSize: ResponsiveUtils.fontSize(context, 10),
+                        fontWeight: FontWeight.bold,
+                        color: primaryColor500,
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
           if (trailing != null) trailing!,
         ],

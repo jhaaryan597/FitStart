@@ -264,6 +264,7 @@ class _SearchViewState extends State<SearchView> with AutomaticKeepAliveClientMi
           ),
           Expanded(
             child: ListView(
+              padding: const EdgeInsets.only(bottom: 120),
               children: [
                 const SizedBox(
                   height: 16,

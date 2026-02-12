@@ -11,11 +11,13 @@ class TabHistoryView extends StatefulWidget {
   State<TabHistoryView> createState() => _TabHistoryViewState();
 }
 
-class _TabHistoryViewState extends State<TabHistoryView> with AutomaticKeepAliveClientMixin {
+class _TabHistoryViewState extends State<TabHistoryView>
+    with AutomaticKeepAliveClientMixin {
   List<Map<String, dynamic>> _history = [];
   bool _isLoading = true;
+  bool _isLoadingData = false; // Prevent multiple simultaneous loads
   String _selectedPeriod = 'All Time';
-  
+
   @override
   bool get wantKeepAlive => false; // Don't keep alive to ensure fresh data
 
@@ -24,14 +26,14 @@ class _TabHistoryViewState extends State<TabHistoryView> with AutomaticKeepAlive
     super.initState();
     _loadHistory();
   }
-  
+
   @override
   void didUpdateWidget(TabHistoryView oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Reload when widget updates
     _loadHistory();
   }
-  
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -42,54 +44,105 @@ class _TabHistoryViewState extends State<TabHistoryView> with AutomaticKeepAlive
   }
 
   Future<void> _loadHistory() async {
-    if (!mounted) return;
-    
-    setState(() => _isLoading = true);
+    if (!mounted || _isLoadingData)
+      return; // Prevent multiple simultaneous loads
+
+    setState(() {
+      _isLoadingData = true;
+      _isLoading = true;
+    });
 
     try {
       // Use LocalBookingService with fallback
       final result = await LocalBookingService.getBookingsWithFallback();
-      
+
       if (result['success'] == true && mounted) {
         final List<dynamic> allBookings = result['data'] ?? [];
-        
-        // Filter for paid/completed bookings and normalize data
+
+        // Filter for paid/completed and past bookings, then normalize data
+        final today = DateTime.now();
+        final todayDateStr =
+            '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
         final paidBookings = allBookings.where((booking) {
-          final paymentStatus = booking['payment']?['status'] ?? booking['payment_status'];
-          final bookingStatus = booking['bookingStatus'] ?? booking['booking_status'];
-          return bookingStatus == 'confirmed' || 
-                 bookingStatus == 'completed' ||
-                 paymentStatus == 'completed' || 
-                 paymentStatus == 'paid';
+          final paymentStatus =
+              booking['payment']?['status'] ?? booking['payment_status'];
+          final bookingStatus =
+              booking['bookingStatus'] ?? booking['booking_status'];
+          final bookingDate = booking['bookingDate'] ?? booking['booking_date'];
+
+          // Only show past bookings that are paid/completed
+          final isPaidOrCompleted = bookingStatus == 'confirmed' ||
+              bookingStatus == 'completed' ||
+              paymentStatus == 'completed' ||
+              paymentStatus == 'paid';
+          final isPastBooking =
+              bookingDate != null && bookingDate.compareTo(todayDateStr) < 0;
+
+          return isPaidOrCompleted && isPastBooking;
         }).map((order) {
           // Normalize data format
+          final bookingType = order['bookingType'] ?? 'sport_booking';
+          final isGymBooking = bookingType == 'gym_membership';
+          
           return {
             'id': order['_id'] ?? order['id'],
-            'venue_name': order['venue']?['name'] ?? order['venue_name'] ?? 'Unknown Venue',
-            'venue_id': order['venue']?['_id'] ?? order['venue']?['id'] ?? order['venue_id'],
+            'venue_name': isGymBooking
+                ? (order['gymName'] ?? 'Unknown Gym')
+                : (order['venue']?['name'] ??
+                    order['venue_name'] ??
+                    'Unknown Venue'),
+            'venue_id': order['venue']?['_id'] ??
+                order['venue']?['id'] ??
+                order['venue_id'],
             'booking_date': order['bookingDate'] ?? order['booking_date'],
-            'booking_times': order['timeSlots'] != null 
-                ? (order['timeSlots'] as List).map((slot) => '${slot['startTime']} - ${slot['endTime']}').toList()
+            'booking_times': order['timeSlots'] != null
+                ? (order['timeSlots'] as List)
+                    .map((slot) => '${slot['startTime']} - ${slot['endTime']}')
+                    .toList()
                 : (order['booking_times'] ?? []),
-            'total_amount': order['pricing']?['totalAmount']?.toInt() ?? order['total_amount'] ?? 0,
+            'total_amount': isGymBooking
+                ? (order['totalAmount'] ?? 0)
+                : (order['pricing']?['totalAmount']?.toInt() ??
+                    order['total_amount'] ??
+                    0),
             'payment_status': 'paid',
-            'payment_method': order['payment']?['method'] ?? order['payment_method'] ?? 'unknown',
-            'booking_status': order['bookingStatus'] ?? order['booking_status'] ?? 'confirmed',
-            'created_at': order['createdAt'] ?? order['created_at'] ?? DateTime.now().toIso8601String(),
-            'venue_address': order['venue']?['address'] ?? order['venue_address'] ?? '',
+            'payment_method': order['payment']?['method'] ??
+                order['payment_method'] ??
+                'unknown',
+            'booking_status': order['bookingStatus'] ??
+                order['booking_status'] ??
+                'confirmed',
+            'created_at': order['createdAt'] ??
+                order['created_at'] ??
+                DateTime.now().toIso8601String(),
+            'venue_address':
+                order['venue']?['address'] ?? order['venue_address'] ?? '',
+            'booking_type': bookingType,
           };
         }).toList();
-        
+
         setState(() {
           _history = paidBookings;
           _isLoading = false;
+          _isLoadingData = false;
         });
       } else {
-        if (mounted) setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _isLoadingData = false;
+          });
+        }
       }
     } catch (e) {
       print('Error loading history: $e');
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isLoadingData = false;
+        });
+      }
     }
   }
 
@@ -219,7 +272,8 @@ class _TabHistoryViewState extends State<TabHistoryView> with AutomaticKeepAlive
                     : RefreshIndicator(
                         onRefresh: _loadHistory,
                         child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.only(
+                              left: 16, right: 16, bottom: 120),
                           itemCount: _groupedHistory.length,
                           itemBuilder: (context, index) {
                             final monthYear =

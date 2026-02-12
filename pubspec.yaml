@@ -18,7 +18,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ">=2.17.0 <4.0.0"
+  sdk: ">=3.0.0 <4.0.0"
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -69,6 +69,7 @@ dependencies:
   permission_handler: ^11.3.0
   cached_network_image: ^3.3.1
   flutter_dotenv: ^6.0.0
+  # Removed: fluttertoast, sqflite, path_provider (unused)
 
 
 dev_dependencies:
@@ -134,16 +135,13 @@ flutter:
   # see https://flutter.dev/custom-fonts/#from-packages
 
 # Launcher icons configuration
-# Using auto-generated padded logo for adaptive icons
 flutter_launcher_icons:
   android: true
   ios: false
-  # Standard icon for older Android versions
-  image_path: assets/images/logo.png
-  # Adaptive icon with automatic 20% padding to prevent clipping
-  adaptive_icon_background: "#92C848"
-  adaptive_icon_foreground: assets/images/logo_adaptive.png
-  min_sdk_android: 21
+  image_path: assets/images/logo_adaptive.png
+  # Reduced zoom to better position text at bottom
+  background_color_android: "#FFFFFF"
+  android_padding: -80
 
 # Native splash screen configuration
 # Note: On Android 12+, the splash image is displayed inside a circular mask.

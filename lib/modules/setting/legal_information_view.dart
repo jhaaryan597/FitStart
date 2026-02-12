@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:FitStart/theme.dart';
 
 class LegalInformationView extends StatelessWidget {
@@ -240,8 +241,11 @@ class LegalInformationView extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        // Email legal department
+                      onPressed: () async {
+                        final uri = Uri.parse('mailto:legal@fitstart.com?subject=Legal Inquiry');
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri);
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),

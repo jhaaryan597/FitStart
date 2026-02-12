@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:FitStart/model/sport_field.dart';
+import 'package:FitStart/model/gym.dart';
 import 'package:FitStart/services/favorites_service.dart';
 import 'package:FitStart/theme.dart';
 import 'package:FitStart/utils/dummy_data.dart';
+import 'package:FitStart/utils/gym_data.dart';
 import 'package:FitStart/components/sport_field_card.dart';
+import 'package:FitStart/components/gym_card.dart';
 
 class FavoritesView extends StatefulWidget {
   const FavoritesView({Key? key}) : super(key: key);
@@ -13,10 +16,12 @@ class FavoritesView extends StatefulWidget {
   State<FavoritesView> createState() => _FavoritesViewState();
 }
 
-class _FavoritesViewState extends State<FavoritesView> with AutomaticKeepAliveClientMixin {
+class _FavoritesViewState extends State<FavoritesView>
+    with AutomaticKeepAliveClientMixin {
   List<SportField> _favoriteVenues = [];
+  List<Gym> _favoriteGyms = [];
   bool _isLoading = true;
-  
+
   @override
   bool get wantKeepAlive => false; // Don't keep alive to ensure fresh data
 
@@ -25,13 +30,13 @@ class _FavoritesViewState extends State<FavoritesView> with AutomaticKeepAliveCl
     super.initState();
     _loadFavorites();
   }
-  
+
   @override
   void didUpdateWidget(FavoritesView oldWidget) {
     super.didUpdateWidget(oldWidget);
     _loadFavorites();
   }
-  
+
   // Called when returning from other screens
   @override
   void didChangeDependencies() {
@@ -50,14 +55,20 @@ class _FavoritesViewState extends State<FavoritesView> with AutomaticKeepAliveCl
     try {
       final favoriteIds = await FavoritesService.getFavoriteVenueIds();
 
-      // Filter venues from dummy data that match favorite IDs
+      // Filter sport venues from dummy data that match favorite IDs
       final favorites = sportFieldList
           .where((venue) => favoriteIds.contains(venue.id))
+          .toList();
+
+      // Filter gyms that match favorite IDs (with GYM_ prefix)
+      final gymFavorites = gymList
+          .where((gym) => favoriteIds.contains('GYM_${gym.id}'))
           .toList();
 
       if (mounted) {
         setState(() {
           _favoriteVenues = favorites;
+          _favoriteGyms = gymFavorites;
           _isLoading = false;
         });
       }
@@ -98,17 +109,24 @@ class _FavoritesViewState extends State<FavoritesView> with AutomaticKeepAliveCl
           ? const Center(
               child: CircularProgressIndicator(),
             )
-          : _favoriteVenues.isEmpty
+          : (_favoriteVenues.isEmpty && _favoriteGyms.isEmpty)
               ? _buildEmptyState()
               : RefreshIndicator(
                   onRefresh: _loadFavorites,
                   child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    itemCount: _favoriteVenues.length,
+                    padding: const EdgeInsets.only(top: 16, bottom: 136),
+                    itemCount: _favoriteVenues.length + _favoriteGyms.length,
                     itemBuilder: (context, index) {
-                      return SportFieldCard(
-                        field: _favoriteVenues[index],
-                      );
+                      if (index < _favoriteVenues.length) {
+                        return SportFieldCard(
+                          field: _favoriteVenues[index],
+                        );
+                      } else {
+                        final gymIndex = index - _favoriteVenues.length;
+                        return GymCard(
+                          gym: _favoriteGyms[gymIndex],
+                        );
+                      }
                     },
                   ),
                 ),

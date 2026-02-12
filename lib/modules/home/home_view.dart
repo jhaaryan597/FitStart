@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:FitStart/services/api_service.dart';
+import 'package:FitStart/services/review_service.dart';
 import 'package:FitStart/model/sport_field.dart';
 import 'package:FitStart/theme.dart';
 import 'package:FitStart/components/category_card.dart';
@@ -10,12 +13,12 @@ import 'package:FitStart/utils/dummy_data.dart';
 import 'package:FitStart/utils/location_service.dart';
 import 'package:FitStart/utils/responsive_utils.dart';
 import 'package:FitStart/utils/animation_utils.dart';
-import 'package:FitStart/services/ml_recommendation_service.dart';
 import 'package:FitStart/core/cache/cache_manager.dart';
 import 'package:FitStart/services/cache_service.dart';
 import 'package:FitStart/services/enhanced_cache_service.dart';
 import 'package:FitStart/services/notification_service.dart';
 import 'package:FitStart/modules/notification/notification_view.dart';
+import 'package:FitStart/modules/root/root_view.dart';
 import 'package:geocoding/geocoding.dart';
 
 class HomeView extends StatefulWidget {
@@ -29,8 +32,6 @@ class _HomeViewState extends State<HomeView>
       List<SportField>.from(sportFieldList);
   List<SportField> _allFields = [];
   List<SportField> _displayedFields = [];
-  List<SportField> _recommendedVenues = [];
-  bool _loadingRecommendations = true;
   String? _currentAddress;
   String? _username;
   String? _profileImageUrl;
@@ -39,12 +40,13 @@ class _HomeViewState extends State<HomeView>
   int _currentPage = 1;
   final int _venuesPerPage = 10;
   final CacheService _cacheService = CacheService();
+  final GlobalKey _venuesSectionKey = GlobalKey();
 
   @override
   bool get wantKeepAlive =>
       true; // Keep state alive when switching tabs  // Filter states
   String _selectedCategory = "All";
-  String _sortBy = 'Default';
+  String _sortBy = 'Nearest';
   bool _openNowOnly = false;
   String _searchQuery = "";
   final TextEditingController _searchController = TextEditingController();
@@ -52,6 +54,9 @@ class _HomeViewState extends State<HomeView>
   // GenZ slang rotation
   Timer? _slangTimer;
   int _currentSlangIndex = 0;
+  
+  // Search debouncing
+  Timer? _searchDebounceTimer;
   final List<String> _genZSlangs = [
     "Let's Get This Bread! 🍞",
     "Time to Hit Different! 💪",
@@ -81,9 +86,12 @@ class _HomeViewState extends State<HomeView>
     _loadCachedDataFirst(); // Load cache instantly
     _fetchUsername();
     _loadSavedLocation();
-    _loadMLRecommendations();
     _loadUnreadNotificationCount();
     _startSlangRotation();
+
+    // Listen for profile refresh notifications
+    ProfileRefreshManager.shouldRefreshHomeProfile
+        .addListener(_onProfileRefresh);
 
     _scrollController.addListener(() {
       if (_scrollController.position.pixels ==
@@ -92,7 +100,7 @@ class _HomeViewState extends State<HomeView>
       }
     });
   }
-  
+
   /// Load cached data first for instant display
   Future<void> _loadCachedDataFirst() async {
     // Try to load from cache
@@ -100,21 +108,82 @@ class _HomeViewState extends State<HomeView>
     if (cached != null && cached.isNotEmpty) {
       if (mounted) {
         setState(() {
-          _allFields = List<SportField>.from(cached)..shuffle();
+          _allFields = List<SportField>.from(cached);
+          // Check if we have cached location and sort accordingly
+          final cachedPosition = LocationService.getLastKnownPosition();
+          if (cachedPosition != null) {
+            // Recalculate distances with cached position and sort by distance
+            _allFields.forEach((field) {
+              field.distanceKm = LocationService.distanceInKm(
+                cachedPosition.latitude,
+                cachedPosition.longitude,
+                field.latitude,
+                field.longitude,
+              );
+            });
+            _sortFieldsByDistance();
+          } else {
+            // No cached location, sort by rating
+            _allFields.sort((a, b) => b.rating.compareTo(a.rating));
+          }
           _loadMoreVenues();
         });
       }
-      // Data loaded from cache, now refresh in background
+      // Data loaded from cache, now update ratings and refresh in background
+      _updateFieldRatings();
       _refreshDataInBackground();
     } else {
       // No cache, load from dummy data
-      _allFields = List<SportField>.from(_originalFields)..shuffle();
-      _loadMoreVenues();
-      // Cache the dummy data
+      if (mounted) {
+        setState(() {
+          _allFields = List<SportField>.from(_originalFields);
+          // Check if we have cached location and sort accordingly
+          final cachedPosition = LocationService.getLastKnownPosition();
+          if (cachedPosition != null) {
+            // Calculate distances with cached position and sort by distance
+            _allFields.forEach((field) {
+              field.distanceKm = LocationService.distanceInKm(
+                cachedPosition.latitude,
+                cachedPosition.longitude,
+                field.latitude,
+                field.longitude,
+              );
+            });
+            _sortFieldsByDistance();
+          } else {
+            // No cached location, sort by rating
+            _allFields.sort((a, b) => b.rating.compareTo(a.rating));
+          }
+          _loadMoreVenues();
+        });
+      }
+      // Update ratings and cache the data
+      _updateFieldRatings();
       await EnhancedCacheService.cacheSportFields(_originalFields);
     }
   }
-  
+
+  /// Update all field ratings from ReviewService
+  Future<void> _updateFieldRatings() async {
+    for (var field in _allFields) {
+      try {
+        final rating = await ReviewService.getVenueRating(
+          venueId: field.id,
+          venueType: 'venue',
+        );
+        field.rating = rating;
+      } catch (e) {
+        // Keep existing rating if fetch fails
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _displayedFields = List.from(_displayedFields); // Trigger rebuild
+      });
+    }
+  }
+
   /// Refresh data in background without blocking UI
   Future<void> _refreshDataInBackground() async {
     // Fetch fresh data from API if available
@@ -147,10 +216,17 @@ class _HomeViewState extends State<HomeView>
 
   @override
   void dispose() {
+    ProfileRefreshManager.shouldRefreshHomeProfile
+        .removeListener(_onProfileRefresh);
     _slangTimer?.cancel();
+    _searchDebounceTimer?.cancel();
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onProfileRefresh() {
+    _fetchUsername();
   }
 
   Future<void> _fetchUsername() async {
@@ -164,10 +240,21 @@ class _HomeViewState extends State<HomeView>
       if (mounted) {
         setState(() {
           _username = (cachedProfile['username'] as String?) ??
-                     (cachedProfile['name'] as String?) ?? 'User';
+              (cachedProfile['name'] as String?) ??
+              'User';
           _profileImageUrl = cachedProfile['profileImage'] as String?;
         });
       }
+
+      // Check for locally stored preset avatar (overrides server image)
+      final box = await Hive.openBox('user_profile_local');
+      final presetAvatar = box.get('preset_avatar') as String?;
+      if (presetAvatar != null && mounted) {
+        setState(() {
+          _profileImageUrl = presetAvatar;
+        });
+      }
+
       return; // Data loaded from cache
     }
 
@@ -176,15 +263,25 @@ class _HomeViewState extends State<HomeView>
       final result = await ApiService.getCurrentUser();
       if (result['success']) {
         final data = result['data'];
-        
+
         // Cache the data using CacheManager
         await CacheManager.set('user_profile', data);
 
         if (mounted) {
           setState(() {
             _username = (data['username'] as String?) ??
-                       (data['name'] as String?) ?? 'User';
+                (data['name'] as String?) ??
+                'User';
             _profileImageUrl = data['profileImage'] as String?;
+          });
+        }
+
+        // Check for locally stored preset avatar (overrides server image)
+        final box = await Hive.openBox('user_profile_local');
+        final presetAvatar = box.get('preset_avatar') as String?;
+        if (presetAvatar != null && mounted) {
+          setState(() {
+            _profileImageUrl = presetAvatar;
           });
         }
       }
@@ -197,88 +294,23 @@ class _HomeViewState extends State<HomeView>
     }
   }
 
-  Future<void> _loadMLRecommendations() async {
-    // Try to load from cache first
-    final cachedRecommendations = _cacheService.getCachedRecommendations();
-    if (cachedRecommendations != null && cachedRecommendations.isNotEmpty) {
-      // Convert cached data back to SportField objects
-      final List<SportField> recommendations =
-          cachedRecommendations.map((data) {
-        // Find matching field from original fields
-        return _originalFields.firstWhere(
-          (field) => field.name == data['name'],
-          orElse: () => _originalFields.first,
-        );
-      }).toList();
+  // Public method to refresh profile data - called when returning from profile screen
+  void refreshProfileData() {
+    _fetchUsername();
+  }
 
-      if (mounted) {
-        setState(() {
-          _recommendedVenues = recommendations;
-          _loadingRecommendations = false;
-        });
-      }
-      // Data loaded from cache, no need to fetch from server
-      return;
-    }
-
-    setState(() {
-      _loadingRecommendations = true;
-    });
-
-    try {
-      // Get current user to fetch user ID
-      final result = await ApiService.getCurrentUser();
-      final userId = result['success'] ? result['data']['_id'] as String? : null;
-
-      // Load from cache first
-      final cachedRecommendations = await EnhancedCacheService.getRecommendedVenues();
-      if (cachedRecommendations != null && cachedRecommendations.isNotEmpty && mounted) {
-        setState(() {
-          _recommendedVenues = cachedRecommendations;
-          _loadingRecommendations = false;
-        });
-      }
-      
-      // Then fetch fresh recommendations
-      final recommendations =
-          await MLRecommendationService.getRecommendedVenues(
-        userId: userId,
-        limit: 10,
-      );
-
-      // Cache the recommendations
-      await EnhancedCacheService.cacheRecommendedVenues(recommendations);
-      final cacheData = recommendations
-          .map((field) => {
-                'name': field.name,
-                'address': field.address,
-              })
-          .toList();
-      await _cacheService.cacheRecommendations(cacheData);
-
-      if (mounted) {
-        setState(() {
-          _recommendedVenues = recommendations;
-          _loadingRecommendations = false;
-        });
-      }
-    } catch (e) {
-      print('Error loading ML recommendations: $e');
-      if (mounted) {
-        setState(() {
-          _loadingRecommendations = false;
-        });
-      }
-    }
+  void _sortFieldsByDistance() {
+    _allFields.sort((a, b) => (a.distanceKm ?? double.infinity)
+        .compareTo(b.distanceKm ?? double.infinity));
   }
 
   Future<void> _loadSavedLocation() async {
     // First check if we have a cached position from LocationService
     final cachedPosition = LocationService.getLastKnownPosition();
     final cachedAddress = LocationService.getLastKnownAddress();
-    
+
     if (cachedPosition != null && cachedAddress != null) {
-      print('✅ Using cached location from LocationService');
+      // Using cached location from LocationService
       setState(() {
         _currentAddress = cachedAddress;
         _allFields.forEach((field) {
@@ -289,15 +321,14 @@ class _HomeViewState extends State<HomeView>
             field.longitude,
           );
         });
-        _allFields.sort((a, b) => (a.distanceKm ?? double.infinity)
-            .compareTo(b.distanceKm ?? double.infinity));
         _displayedFields.clear();
         _currentPage = 1;
       });
+      _sortFieldsByDistance();
       _loadMoreVenues();
       return;
     }
-    
+
     // Try to load from legacy cache
     final cachedLocation = _cacheService.getCachedLocation();
     if (cachedLocation != null && cachedLocation.isNotEmpty) {
@@ -319,7 +350,7 @@ class _HomeViewState extends State<HomeView>
         }
       }
     } catch (e) {
-      print('Error loading saved location: $e');
+      debugPrint('Error loading saved location: $e');
     }
   }
 
@@ -330,10 +361,45 @@ class _HomeViewState extends State<HomeView>
 
       // Note: Backend endpoint for updating saved location needs to be added
       // For now, location is cached locally
-      print('Location cached successfully: $address');
     } catch (e) {
-      print('Error saving location: $e');
+      debugPrint('Error saving location: $e');
     }
+  }
+
+  void _onCategorySelected(String category) {
+    setState(() {
+      _selectedCategory = category;
+    });
+    _applyFilters();
+    _scrollToVenuesSection();
+  }
+
+  void _scrollToVenuesSection() {
+    // Wait for the next frame to ensure the UI is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = _venuesSectionKey.currentContext;
+      if (context != null) {
+        // Get the render box of the venue section
+        final renderBox = context.findRenderObject() as RenderBox?;
+        if (renderBox != null) {
+          // Get the position of the venue section relative to the screen
+          final position = renderBox.localToGlobal(Offset.zero);
+          // Calculate offset to account for header height
+          // Header typically takes about 120-150 pixels on most devices
+          final headerOffset =
+              240.0; // Reduced offset to show venue header below search bar
+          final targetOffset =
+              _scrollController.offset + position.dy - headerOffset;
+
+          // Scroll to the calculated position
+          _scrollController.animateTo(
+            targetOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOut,
+          );
+        }
+      }
+    });
   }
 
   void _applyFilters() {
@@ -365,13 +431,6 @@ class _HomeViewState extends State<HomeView>
 
     // Sort
     switch (_sortBy) {
-      case 'Default':
-        filtered.shuffle(); // Random order for default
-        break;
-      case 'Nearest':
-        filtered.sort((a, b) => (a.distanceKm ?? double.infinity)
-            .compareTo(b.distanceKm ?? double.infinity));
-        break;
       case 'Price: Low to High':
         filtered.sort((a, b) => a.price.compareTo(b.price));
         break;
@@ -380,6 +439,11 @@ class _HomeViewState extends State<HomeView>
         break;
       case 'Rating: High to Low':
         filtered.sort((a, b) => b.rating.compareTo(a.rating));
+        break;
+      case 'Nearest':
+      default: // Default to nearest for backward compatibility
+        filtered.sort((a, b) => (a.distanceKm ?? double.infinity)
+            .compareTo(b.distanceKm ?? double.infinity));
         break;
     }
 
@@ -412,7 +476,7 @@ class _HomeViewState extends State<HomeView>
       try {
         // Cache this address in LocationService
         await LocationService.setLocationFromAddress(address);
-        
+
         final locations = await locationFromAddress(address);
         if (locations.isNotEmpty) {
           final location = locations.first;
@@ -426,21 +490,18 @@ class _HomeViewState extends State<HomeView>
                 field.longitude,
               );
             });
-            // Sort by distance (nearest to farthest)
-            _allFields.sort((a, b) => (a.distanceKm ?? double.infinity)
-                .compareTo(b.distanceKm ?? double.infinity));
-
             // Reset displayed venues and reload from sorted list
             _displayedFields.clear();
             _currentPage = 1;
-            _loadMoreVenues();
           });
+          _sortFieldsByDistance();
+          _loadMoreVenues();
 
           // Save location to database
           await _saveLocationToDatabase(address);
         }
       } catch (e) {
-        print('Error geocoding address: $e');
+        debugPrint('Error geocoding address: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -456,7 +517,7 @@ class _HomeViewState extends State<HomeView>
       if (position != null) {
         // Try to get address if not already cached
         String? locationString = LocationService.getLastKnownAddress();
-        
+
         if (locationString == null) {
           final placemark = await LocationService.getCurrentPlacemark();
           if (placemark != null) {
@@ -467,7 +528,7 @@ class _HomeViewState extends State<HomeView>
             locationString = locationString.replaceAll(RegExp(r',\s*,'), ',');
           }
         }
-        
+
         if (mounted) {
           setState(() {
             _currentAddress = locationString ?? 'Current Location';
@@ -479,15 +540,12 @@ class _HomeViewState extends State<HomeView>
                 field.longitude,
               );
             });
-            // Sort by distance (nearest to farthest)
-            _allFields.sort((a, b) => (a.distanceKm ?? double.infinity)
-                .compareTo(b.distanceKm ?? double.infinity));
-
             // Reset displayed venues and reload from sorted list
             _displayedFields.clear();
             _currentPage = 1;
-            _loadMoreVenues();
           });
+          _sortFieldsByDistance();
+          _loadMoreVenues();
 
           // Save location to database
           if (locationString != null) {
@@ -498,7 +556,8 @@ class _HomeViewState extends State<HomeView>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Unable to get location. Please enable location services.'),
+              content: Text(
+                  'Unable to get location. Please enable location services.'),
               duration: Duration(seconds: 3),
             ),
           );
@@ -523,7 +582,7 @@ class _HomeViewState extends State<HomeView>
                 await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const NotificationView(),
+                    builder: (context) => NotificationView(),
                   ),
                 );
                 // Reload unread count when returning from notification screen
@@ -538,10 +597,13 @@ class _HomeViewState extends State<HomeView>
                 controller: _searchController,
                 hintText: "Search venues...",
                 onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value;
+                  _searchDebounceTimer?.cancel();
+                  _searchDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+                    setState(() {
+                      _searchQuery = value;
+                    });
+                    _applyFilters();
                   });
-                  _applyFilters();
                 },
                 onClear: () {
                   _searchController.clear();
@@ -595,8 +657,8 @@ class _HomeViewState extends State<HomeView>
           SizedBox(height: ResponsiveUtils.spacing(context, 8)),
           LocationDisplay(
             address: _currentAddress,
-            onTap: () => _getCurrentLocation(),
-            onLocationSubmitted: (address) => _getCurrentLocation(address: address),
+            onLocationSubmitted: (address) =>
+                _getCurrentLocation(address: address),
             showSetLocationPrompt: _currentAddress == null,
           ),
         ],
@@ -616,65 +678,15 @@ class _HomeViewState extends State<HomeView>
             child: ResponsiveContainer(
               child: ListView(
                 controller: _scrollController,
-                padding: EdgeInsets.zero,
+                padding: const EdgeInsets.only(
+                    bottom: 120), // Space for floating nav bar
                 children: [
                   // Hide these sections when user is searching
                   if (_searchQuery.isEmpty) ...[
                     _buildGreetingSection(context),
-                    CategoryListView(),
-                    // ML Recommendations Section
-                    if (_recommendedVenues.isNotEmpty) ...[
-                      SectionHeader(
-                        title: "Recommended for You",
-                        icon: Icons.auto_awesome,
-                        badge: "ML Powered",
-                        padding: ResponsiveUtils.padding(
-                          context,
-                          horizontal: 16,
-                          top: 16,
-                        ),
-                      ),
-                      SizedBox(height: ResponsiveUtils.spacing(context, 8)),
-                      SizedBox(
-                        height: ResponsiveUtils.responsive(
-                          context: context,
-                          mobile: 300.0,
-                          tablet: 340.0,
-                          desktop: 380.0,
-                        ),
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          physics: const BouncingScrollPhysics(),
-                          padding:
-                              ResponsiveUtils.padding(context, horizontal: 12),
-                          itemCount: _recommendedVenues.length,
-                          itemBuilder: (context, index) {
-                            return Container(
-                              width: ResponsiveUtils.responsive(
-                                context: context,
-                                mobile: 220.0,
-                                tablet: 260.0,
-                                desktop: 300.0,
-                              ),
-                              margin: ResponsiveUtils.padding(context,
-                                  horizontal: 4),
-                              child: SportFieldCard(
-                                field: _recommendedVenues[index],
-                                index: index,
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                    if (_loadingRecommendations) ...[
-                      Padding(
-                        padding: ResponsiveUtils.padding(context, all: 16),
-                        child: LoadingIndicator(
-                          message: "Loading recommendations...",
-                        ),
-                      ),
-                    ],
+                    CategoryListView(
+                      onCategorySelected: _onCategorySelected,
+                    ),
                   ],
                   SectionHeader(
                     title: "All Venues",
@@ -694,6 +706,7 @@ class _HomeViewState extends State<HomeView>
                           visualDensity: VisualDensity.compact,
                           selectedColor: primaryColor500.withOpacity(0.3),
                           checkmarkColor: primaryColor500,
+                          showCheckmark: false,
                           onSelected: (v) {
                             setState(() {
                               _openNowOnly = v;
@@ -708,12 +721,14 @@ class _HomeViewState extends State<HomeView>
                       ],
                     ),
                   ),
-                  Column(
-                    children: _displayedFields
-                        .map((fieldEntity) => SportFieldCard(
-                              field: fieldEntity,
-                            ))
-                        .toList(),
+                  ListView.builder(
+                    key: _venuesSectionKey,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _displayedFields.length,
+                    itemBuilder: (context, index) => SportFieldCard(
+                      field: _displayedFields[index],
+                    ),
                   ),
                 ],
               ),
@@ -791,7 +806,6 @@ class _HomeViewState extends State<HomeView>
         });
       },
       itemBuilder: (context) => [
-        const PopupMenuItem(value: 'Default', child: Text('Default')),
         const PopupMenuItem(value: 'Nearest', child: Text('Nearest')),
         const PopupMenuItem(
             value: 'Price: Low to High', child: Text('Price: Low to High')),

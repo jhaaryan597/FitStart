@@ -1,10 +1,14 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:FitStart/model/gym.dart';
 import 'package:FitStart/components/gym_card.dart';
 import 'package:FitStart/theme.dart';
 import 'package:FitStart/utils/gym_data.dart';
 import 'package:FitStart/services/enhanced_cache_service.dart';
+import 'package:FitStart/utils/location_service.dart';
+import 'package:FitStart/services/api_service.dart';
 
 class GymsView extends StatefulWidget {
   const GymsView({Key? key}) : super(key: key);
@@ -17,7 +21,8 @@ class _GymsViewState extends State<GymsView> with AutomaticKeepAliveClientMixin 
   List<Gym> _allGyms = [];
   List<Gym> _displayedGyms = [];
   String _selectedType = 'All';
-  String _sortBy = 'Default';
+  String _sortBy = 'Nearest'; // Default to nearest
+  Position? _position;
 
   final List<String> _gymTypes = [
     'All',
@@ -35,6 +40,7 @@ class _GymsViewState extends State<GymsView> with AutomaticKeepAliveClientMixin 
   void initState() {
     super.initState();
     _loadGymsWithCache();
+    _initLocation();
   }
   
   /// Load gyms with cache-first strategy
@@ -45,7 +51,13 @@ class _GymsViewState extends State<GymsView> with AutomaticKeepAliveClientMixin 
       if (mounted) {
         setState(() {
           _allGyms = cached;
-          _displayedGyms = List<Gym>.from(cached);
+          // Check for cached location and calculate distances if available
+          final cachedPosition = LocationService.getLastKnownPosition();
+          if (cachedPosition != null) {
+            _position = cachedPosition;
+            _calculateDistances();
+          }
+          _applyFilters();
         });
       }
       // Refresh in background
@@ -55,7 +67,13 @@ class _GymsViewState extends State<GymsView> with AutomaticKeepAliveClientMixin 
       if (mounted) {
         setState(() {
           _allGyms = List<Gym>.from(gymList);
-          _displayedGyms = List<Gym>.from(gymList);
+          // Check for cached location and calculate distances if available
+          final cachedPosition = LocationService.getLastKnownPosition();
+          if (cachedPosition != null) {
+            _position = cachedPosition;
+            _calculateDistances();
+          }
+          _applyFilters();
         });
       }
       // Cache the data
@@ -70,6 +88,66 @@ class _GymsViewState extends State<GymsView> with AutomaticKeepAliveClientMixin 
     await EnhancedCacheService.cacheGyms(gymList);
   }
 
+  Future<void> _initLocation() async {
+    // First try cached position from LocationService
+    final cachedPos = LocationService.getLastKnownPosition();
+
+    if (cachedPos != null) {
+      // Using cached location from LocationService
+      if (!mounted) return;
+      setState(() {
+        _position = cachedPos;
+        _calculateDistances();
+        _applyFilters();
+      });
+      return;
+    }
+
+    // Try to load saved location from database
+    Position? pos;
+    try {
+      final result = await ApiService.getCurrentUser();
+      if (result['success']) {
+        final data = result['data'];
+        final savedLocation = data['savedLocation'] as String?;
+        if (savedLocation != null && savedLocation.isNotEmpty) {
+          // Get coordinates from saved address
+          try {
+            await LocationService.setLocationFromAddress(savedLocation);
+            pos = LocationService.getLastKnownPosition();
+          } catch (e) {
+            debugPrint('Error getting coordinates from saved location: $e');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading saved location: $e');
+    }
+
+    // If no saved location, try current GPS location (with cache)
+    pos ??= await LocationService.getCurrentPosition();
+
+    if (!mounted) return;
+    setState(() {
+      _position = pos;
+      _calculateDistances();
+      _applyFilters();
+    });
+  }
+
+  void _calculateDistances() {
+    if (_position != null) {
+      for (final gym in _allGyms) {
+        gym.distanceKm = LocationService.distanceInKm(
+          _position!.latitude,
+          _position!.longitude,
+          gym.latitude,
+          gym.longitude,
+        );
+      }
+    }
+  }
+
   void _applyFilters() {
     List<Gym> filtered = List<Gym>.from(_allGyms);
 
@@ -79,17 +157,35 @@ class _GymsViewState extends State<GymsView> with AutomaticKeepAliveClientMixin 
     }
 
     // Sort
-    if (_sortBy == 'Price: Low to High') {
-      filtered.sort((a, b) => a.monthlyPrice.compareTo(b.monthlyPrice));
-    } else if (_sortBy == 'Price: High to Low') {
-      filtered.sort((a, b) => b.monthlyPrice.compareTo(a.monthlyPrice));
-    } else if (_sortBy == 'Rating') {
-      filtered.sort((a, b) => b.rating.compareTo(a.rating));
-    }
+    _sortGyms(filtered);
 
     setState(() {
       _displayedGyms = filtered;
     });
+  }
+
+  void _sortGyms(List<Gym> gyms) {
+    switch (_sortBy) {
+      case 'Price: Low to High':
+        gyms.sort((a, b) => a.monthlyPrice.compareTo(b.monthlyPrice));
+        break;
+      case 'Price: High to Low':
+        gyms.sort((a, b) => b.monthlyPrice.compareTo(a.monthlyPrice));
+        break;
+      case 'Rating':
+        gyms.sort((a, b) => b.rating.compareTo(a.rating));
+        break;
+      case 'Nearest':
+      default: // Default to nearest for backward compatibility
+        if (_position != null) {
+          gyms.sort((a, b) => (a.distanceKm ?? double.infinity)
+              .compareTo(b.distanceKm ?? double.infinity));
+        } else {
+          // Sort by rating when location is not available
+          gyms.sort((a, b) => b.rating.compareTo(a.rating));
+        }
+        break;
+    }
   }
 
   @override
@@ -163,7 +259,7 @@ class _GymsViewState extends State<GymsView> with AutomaticKeepAliveClientMixin 
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.only(top: 8, bottom: 20),
+                    padding: const EdgeInsets.only(top: 8, bottom: 120), // Space for floating nav bar
                     itemCount: _displayedGyms.length,
                     itemBuilder: (context, index) {
                       return GymCard(gym: _displayedGyms[index]);
@@ -205,7 +301,7 @@ class _GymsViewState extends State<GymsView> with AutomaticKeepAliveClientMixin 
                   Text('Sort By', style: titleTextStyle),
                   const SizedBox(height: 16),
                   ...[
-                    'Default',
+                    'Nearest',
                     'Price: Low to High',
                     'Price: High to Low',
                     'Rating'

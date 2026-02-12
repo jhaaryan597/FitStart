@@ -8,8 +8,6 @@ import 'package:FitStart/theme.dart';
 import 'package:FitStart/components/facility_card.dart';
 import 'package:FitStart/components/reviews_section.dart';
 import 'package:FitStart/services/favorites_service.dart';
-import 'package:FitStart/services/ml/interaction_tracker.dart';
-import 'package:FitStart/services/api_service.dart';
 import 'package:FitStart/services/communication_service.dart';
 import 'package:FitStart/utils/animation_utils.dart';
 
@@ -34,26 +32,6 @@ class _DetailViewState extends State<DetailView> {
     super.initState();
     _generateSportImages();
     _checkFavoriteStatus();
-    _trackVenueView(); // Track venue view for ML recommendations
-  }
-
-  /// Track venue view for ML learning
-  Future<void> _trackVenueView() async {
-    try {
-      final userResult = await ApiService.getCurrentUser();
-      if (userResult['success']) {
-        final userId = userResult['data']['_id'] as String?;
-        if (userId != null) {
-          await InteractionTracker.trackView(
-            userId: userId,
-            venueId: widget.field.id,
-            venueType: 'sport_field',
-          );
-        }
-      }
-    } catch (e) {
-      print('Error tracking venue view: $e');
-    }
   }
 
   @override
@@ -121,23 +99,6 @@ class _DetailViewState extends State<DetailView> {
       setState(() {
         _isFavorite = !_isFavorite;
       });
-
-      // Track favorite/unfavorite for ML recommendations
-      try {
-        final userResult = await ApiService.getCurrentUser();
-        if (userResult['success']) {
-          final userId = userResult['data']['_id'] as String?;
-          if (userId != null) {
-            await InteractionTracker.trackFavorite(
-              userId: userId,
-              venueId: widget.field.id,
-              venueType: 'sport_field',
-            );
-          }
-        }
-      } catch (e) {
-        print('Error tracking favorite: $e');
-      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

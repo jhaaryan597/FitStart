@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -25,29 +26,25 @@ Future<void> main() async {
   // Initialize Firebase
   try {
     await Firebase.initializeApp();
-    print('✅ Firebase initialized successfully');
+    if (kDebugMode) debugPrint('✅ Firebase initialized successfully');
   } catch (e) {
-    print('⚠️ Firebase initialization error: $e');
+    if (kDebugMode) debugPrint('⚠️ Firebase initialization error: $e');
   }
   
-  // Initialize Hive
+  // Initialize Hive first (required for other services)
   await Hive.initFlutter();
   await Hive.openBox('fitstart_auth');
   
-  // Initialize Cache Manager
-  await CacheManager.init();
-  
-  // Initialize Favorites Service
-  await FavoritesService.init();
-  
-  // Initialize Location Service (load cached location)
-  await LocationService.init();
+  // Initialize dependent services concurrently
+  await Future.wait([
+    CacheManager.init(),
+    FavoritesService.init(),
+    LocationService.init(),
+    initializeDateFormatting('en', null),
+  ]);
   
   // Clean expired cache entries on startup (older than 7 days)
   await CacheManager.cleanExpired(const Duration(days: 7));
-  
-  // Initialize date formatting
-  await initializeDateFormatting('en', null);
   
   // Initialize dependency injection
   await di.init();
@@ -56,9 +53,9 @@ Future<void> main() async {
   try {
     final notificationService = NotificationService();
     await notificationService.init();
-    print('✅ Notifications initialized successfully');
+    if (kDebugMode) debugPrint('✅ Notifications initialized successfully');
   } catch (e) {
-    print('⚠️ Notification initialization error: $e');
+    if (kDebugMode) debugPrint('⚠️ Notification initialization error: $e');
   }
 
   runApp(const MyApp());

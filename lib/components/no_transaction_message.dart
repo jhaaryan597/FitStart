@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../modules/search/search_view.dart';
+import '../modules/root/root_view.dart';
 import '../theme.dart';
 
 class NoTranscationMessage extends StatelessWidget {
@@ -46,11 +46,12 @@ class NoTranscationMessage extends StatelessWidget {
             ),
             TextButton.icon(
                 onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) {
-                    return SearchView(
-                      selectedDropdownItem: "",
-                    );
-                  }));
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => RootView(currentScreen: 0)),
+                    (route) => false,
+                  );
                 },
                 icon: const Icon(Icons.search),
                 label: Text(

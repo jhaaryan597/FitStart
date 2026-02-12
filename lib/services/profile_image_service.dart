@@ -1,7 +1,11 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:image_picker/image_picker.dart';
 import 'package:FitStart/services/api_service.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:http_parser/http_parser.dart';
 
 class ProfileImageService {
   static final ImagePicker _picker = ImagePicker();
@@ -41,7 +45,7 @@ class ProfileImageService {
       }
 
       if (!hasPermission) {
-        print('Gallery permission denied');
+        if (kDebugMode) debugPrint('Gallery permission denied');
         return null;
       }
 
@@ -57,7 +61,7 @@ class ProfileImageService {
       }
       return null;
     } catch (e) {
-      print('Error picking image from gallery: $e');
+      if (kDebugMode) debugPrint('Error picking image from gallery: $e');
       rethrow;
     }
   }
@@ -69,7 +73,7 @@ class ProfileImageService {
       final hasPermission = await _requestPermission(Permission.camera);
 
       if (!hasPermission) {
-        print('Camera permission denied');
+        if (kDebugMode) debugPrint('Camera permission denied');
         return null;
       }
 
@@ -86,7 +90,7 @@ class ProfileImageService {
       }
       return null;
     } catch (e) {
-      print('Error picking image from camera: $e');
+      if (kDebugMode) debugPrint('Error picking image from camera: $e');
       rethrow;
     }
   }
@@ -95,14 +99,38 @@ class ProfileImageService {
   static Future<String?> uploadProfileImage(
       File imageFile, String userId) async {
     try {
-      // TODO: Implement backend image upload endpoint
-      // This should upload to cloud storage (Cloudinary, S3, etc.)
-      // For now, return null indicating upload not implemented
-      print('Image upload to backend not implemented yet');
-      print('File: ${imageFile.path}, User: $userId');
-      return null;
+      // Create multipart request
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('${ApiService.baseUrl}/auth/upload-profile-image'),
+      );
+
+      // Add authorization header
+      final headers = await ApiService.getHeaders();
+      request.headers.addAll(headers);
+
+      // Add image file
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'image',
+          imageFile.path,
+          contentType: MediaType('image', imageFile.path.split('.').last),
+        ),
+      );
+
+      // Send request
+      final response = await request.send();
+      final responseData = await response.stream.bytesToString();
+      final data = jsonDecode(responseData);
+
+      if (response.statusCode == 200 && data['success']) {
+        return data['data']['profileImage'] as String?;
+      } else {
+        if (kDebugMode) debugPrint('Upload failed: ${data['message']}');
+        return null;
+      }
     } catch (e) {
-      print('Error uploading image: $e');
+      if (kDebugMode) debugPrint('Error uploading image: $e');
       return null;
     }
   }
@@ -112,11 +140,9 @@ class ProfileImageService {
       String userId, String imageUrl) async {
     try {
       // TODO: Backend endpoint to update profile image needs to be created
-      // For now, just log the action
-      print('Profile image URL saved locally: $imageUrl for user: $userId');
       return true;
     } catch (e) {
-      print('Error saving profile image URL: $e');
+      if (kDebugMode) debugPrint('Error saving profile image URL: $e');
       return false;
     }
   }
@@ -130,7 +156,7 @@ class ProfileImageService {
       }
       return null;
     } catch (e) {
-      print('Error fetching profile image: $e');
+      if (kDebugMode) debugPrint('Error fetching profile image: $e');
       return null;
     }
   }
@@ -139,9 +165,8 @@ class ProfileImageService {
   static Future<void> deleteOldProfileImage(String imageUrl) async {
     try {
       // TODO: Backend endpoint to delete old profile images needs to be created
-      print('Delete old image: $imageUrl (backend endpoint needed)');
     } catch (e) {
-      print('Error deleting old image: $e');
+      if (kDebugMode) debugPrint('Error deleting old image: $e');
     }
   }
 }

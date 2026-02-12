@@ -87,8 +87,19 @@ class UserHeader extends StatelessWidget {
           children: [
             Container(
               decoration: BoxDecoration(
-                color: primaryColor500,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    colorBlack.withOpacity(0.3),
+                    colorBlack.withOpacity(0.2),
+                  ],
+                ),
                 borderRadius: BorderRadius.circular(borderRadiusSize),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.3),
+                  width: 1.5,
+                ),
               ),
               child: IconButton(
                 onPressed: onNotificationTap,
@@ -110,7 +121,7 @@ class UserHeader extends StatelessWidget {
                     color: Colors.white,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: primaryColor500,
+                      color: colorBlack.withOpacity(0.3),
                       width: 2,
                     ),
                   ),

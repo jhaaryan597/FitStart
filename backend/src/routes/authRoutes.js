@@ -9,12 +9,29 @@ const {
   registerFCMToken,
   removeFCMToken,
   deleteAccount,
+  uploadProfileImage,
 } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
+const multer = require('multer');
 
 const router = express.Router();
+
+// Configure multer for file uploads
+const upload = multer({
+  dest: 'temp/',
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  },
+});
 
 // Validation rules
 const registerValidation = [
@@ -42,6 +59,7 @@ router.post('/login', loginValidation, login);
 router.get('/me', protect, getMe);
 router.put('/update', protect, updateDetails);
 router.put('/updatepassword', protect, updatePassword);
+router.post('/upload-profile-image', protect, upload.single('image'), uploadProfileImage);
 router.post('/fcm-token', protect, registerFCMToken);
 router.delete('/fcm-token', protect, removeFCMToken);
 router.delete('/me', protect, deleteAccount);

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:FitStart/services/api_service.dart';
-import 'package:FitStart/services/local_chat_service.dart';
 import 'package:FitStart/modules/auth/google_auth_view.dart';
 import 'package:FitStart/modules/setting/privacy_policy_view.dart';
 import 'package:FitStart/modules/setting/support_help_view.dart';
@@ -16,7 +14,6 @@ class SettingsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
@@ -84,46 +81,19 @@ class SettingsView extends StatelessWidget {
                 );
               },
             ),
-            const Spacer(),
-            // Delete Account Button
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: OutlinedButton(
-                onPressed: () {
-                  _showDeleteAccountDialog(context);
-                },
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.red, width: 2),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
-                  ),
-                  backgroundColor: Colors.transparent,
-                ),
-                child: Text(
-                  'Delete Account',
-                  style: buttonTextStyle.copyWith(
-                    color: Colors.red,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 30),
             // Log Out Button
             SizedBox(
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
                 onPressed: () async {
-                  // Clear chat cache before logout
-                  await LocalChatService.clearAllConversations();
-                  
                   final authBloc = context.read<AuthBloc>();
                   authBloc.add(LogoutEvent());
                   if (context.mounted) {
                     Navigator.of(context).pushAndRemoveUntil(
-                      MaterialPageRoute(builder: (context) => const GoogleAuthView()),
+                      MaterialPageRoute(
+                          builder: (context) => const GoogleAuthView()),
                       (route) => false,
                     );
                   }
@@ -200,93 +170,6 @@ class SettingsView extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-
-  void _showDeleteAccountDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Text(
-            'Delete Account',
-            style: titleTextStyle,
-          ),
-          content: Text(
-            'Are you sure you want to delete your account? This action is permanent and cannot be undone.',
-            style: normalTextStyle,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(
-                'Cancel',
-                style: normalTextStyle.copyWith(color: darkBlue300),
-              ),
-            ),
-            TextButton(
-              onPressed: () async {
-                try {
-                  // Call the actual delete account API
-                  final result = await ApiService.deleteAccount();
-
-                  if (!dialogContext.mounted) return;
-                  Navigator.of(dialogContext).pop(); // Close the dialog
-
-                  if (result['success']) {
-                    // Clear chat cache before account deletion
-                    await LocalChatService.clearAllConversations();
-
-                    // Navigate back to auth screen
-                    if (context.mounted) {
-                      Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(builder: (context) => const GoogleAuthView()),
-                        (route) => false,
-                      );
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Account deleted successfully'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }
-                  } else {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Failed to delete account: ${result['error']}'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
-                } catch (e) {
-                  if (!dialogContext.mounted) return;
-                  Navigator.of(dialogContext).pop();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Failed to delete account: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                }
-              },
-              child: Text(
-                'Delete',
-                style: normalTextStyle.copyWith(
-                  color: Colors.red,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 }

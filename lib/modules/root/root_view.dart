@@ -9,6 +9,11 @@ import 'package:FitStart/theme.dart';
 import 'package:FitStart/components/floating_chatbot.dart';
 import 'package:FitStart/utils/responsive_utils.dart';
 
+class ProfileRefreshManager {
+  static final ValueNotifier<bool> shouldRefreshHomeProfile =
+      ValueNotifier(false);
+}
+
 class RootView extends StatefulWidget {
   final int currentScreen;
 
@@ -56,28 +61,46 @@ class _RootViewState extends State<RootView> {
             ),
             // Floating AI Chatbot
             const FloatingChatbot(),
+            // Floating Bottom Navigation Bar
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(
+                top: false,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                  child: CustomBottomNavBar(
+                    defaultSelectedIndex: _currentIndex,
+                    selectedItemIcon: const [
+                      "assets/icons/home_fill.png",
+                      "assets/icons/setup.png",
+                      "assets/icons/receipt_fill.png",
+                      "assets/icons/about_fill.png"
+                    ],
+                    unselectedItemIcon: const [
+                      "assets/icons/home_outlined.png",
+                      "assets/icons/setup.png",
+                      "assets/icons/receipt_outlined.png",
+                      "assets/icons/about_outlined.png"
+                    ],
+                    label: const ["Home", "Gyms", "Transaction", "Profile"],
+                    onChange: (val) {
+                      setState(() {
+                        _currentIndex = val;
+                      });
+                      // Refresh home profile data when switching to home tab
+                      if (val == 0) {
+                        ProfileRefreshManager.shouldRefreshHomeProfile.value =
+                            !ProfileRefreshManager
+                                .shouldRefreshHomeProfile.value;
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ),
           ],
-        ),
-        bottomNavigationBar: CustomBottomNavBar(
-          defaultSelectedIndex: _currentIndex,
-          selectedItemIcon: const [
-            "assets/icons/home_fill.png",
-            "assets/icons/setup.png",
-            "assets/icons/receipt_fill.png",
-            "assets/icons/about_fill.png"
-          ],
-          unselectedItemIcon: const [
-            "assets/icons/home_outlined.png",
-            "assets/icons/setup.png",
-            "assets/icons/receipt_outlined.png",
-            "assets/icons/about_outlined.png"
-          ],
-          label: const ["Home", "Gyms", "Transaction", "Profile"],
-          onChange: (val) {
-            setState(() {
-              _currentIndex = val;
-            });
-          },
         ),
       ),
     );
@@ -148,19 +171,14 @@ class _CustomBottomNavBarState extends State<CustomBottomNavBar> {
             _selectedItemIcon[i], _unselectedItemIcon[i], _label[i], i),
       ));
     }
-    
-    final screenWidth = MediaQuery.of(context).size.width - 32; // minus horizontal margin
-    final itemWidth = screenWidth / _selectedItemIcon.length;
-    final indicatorWidth = 40.0;
-    final indicatorLeft = (_selectedIndex * itemWidth) + (itemWidth / 2) - (indicatorWidth / 2);
-    
+
     return ResponsiveSafeArea(
       child: GestureDetector(
         onHorizontalDragEnd: (details) {
           // Get the last known position from the drag
           final RenderBox? box = context.findRenderObject() as RenderBox?;
           if (box == null) return;
-          
+
           // Switch screen only when finger is lifted
           widget.onChange(_selectedIndex);
         },
@@ -168,10 +186,13 @@ class _CustomBottomNavBarState extends State<CustomBottomNavBar> {
           // Calculate which tab is under the finger
           final RenderBox box = context.findRenderObject() as RenderBox;
           final localPosition = box.globalToLocal(details.globalPosition);
-          final relativePosX = localPosition.dx - 16; // Account for margin
-          
+          final screenWidth = MediaQuery.of(context).size.width;
+          final relativePosX = localPosition.dx;
+
           if (relativePosX >= 0 && relativePosX <= screenWidth) {
-            final newIndex = (relativePosX ~/ itemWidth).clamp(0, _selectedItemIcon.length - 1);
+            final itemWidth = screenWidth / _selectedItemIcon.length;
+            final newIndex = (relativePosX ~/ itemWidth)
+                .clamp(0, _selectedItemIcon.length - 1);
             if (newIndex != _selectedIndex) {
               setState(() {
                 _selectedIndex = newIndex;
@@ -181,92 +202,106 @@ class _CustomBottomNavBarState extends State<CustomBottomNavBar> {
         },
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(25),
-            boxShadow: [
-              BoxShadow(
-                color: neonGreen.withOpacity(0.2),
-                blurRadius: 30,
-                offset: const Offset(0, 10),
-                spreadRadius: -5,
-              ),
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 20,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(25),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-              child: Container(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final containerWidth = constraints.maxWidth;
+              final itemWidth = containerWidth / _selectedItemIcon.length;
+              final indicatorWidth = 32.0;
+              final indicatorLeft = (_selectedIndex * itemWidth) +
+                  (itemWidth / 2) -
+                  (indicatorWidth / 2);
+
+              return Container(
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      colorBlack.withOpacity(0.85),
-                      colorBlack.withOpacity(0.75),
-                    ],
-                  ),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.2),
-                    width: 1.5,
-                  ),
                   borderRadius: BorderRadius.circular(25),
+                  boxShadow: [
+                    BoxShadow(
+                      color: neonGreen.withOpacity(0.2),
+                      blurRadius: 30,
+                      offset: const Offset(0, 10),
+                      spreadRadius: -5,
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 20,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
                 ),
-                child: Stack(
-              children: [
-                // Animated glow indicator
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOutCubic,
-                  bottom: 0,
-                  left: indicatorLeft - 10,
-                  child: Container(
-                    width: indicatorWidth + 20,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.transparent,
-                          neonGreen.withOpacity(0.8),
-                          neonGreen,
-                          neonGreen.withOpacity(0.8),
-                          Colors.transparent,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(25),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            colorBlack.withOpacity(0.3),
+                            colorBlack.withOpacity(0.2),
+                          ],
+                        ),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                          width: 1.5,
+                        ),
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                      child: Stack(
+                        children: [
+                          // Animated glow indicator
+                          AnimatedPositioned(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutCubic,
+                            bottom: 0,
+                            left: indicatorLeft,
+                            child: Container(
+                              width: indicatorWidth,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.transparent,
+                                    neonGreen.withOpacity(0.8),
+                                    neonGreen,
+                                    neonGreen.withOpacity(0.8),
+                                    Colors.transparent,
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: neonGreen.withOpacity(0.5),
+                                    blurRadius: 15,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          // Nav bar items
+                          Row(
+                            mainAxisSize: MainAxisSize.max,
+                            children: _navBarItems,
+                          ),
                         ],
                       ),
-                      borderRadius: BorderRadius.circular(2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: neonGreen.withOpacity(0.5),
-                          blurRadius: 15,
-                          spreadRadius: 2,
-                        ),
-                      ],
                     ),
                   ),
                 ),
-                // Nav bar items
-                Row(
-                  mainAxisSize: MainAxisSize.max,
-                  children: _navBarItems,
-                ),
-              ],
-            ),
+              );
+            },
           ),
-        ),
-        ),
         ),
       ),
     );
   }
 
-  Widget bottomNavBarItem(String activeIcon, String inactiveIcon, String label, int index) {
+  Widget bottomNavBarItem(
+      String activeIcon, String inactiveIcon, String label, int index) {
     final isSelected = _selectedIndex == index;
-    
+
     return GestureDetector(
       onTap: () {
         if (_selectedIndex == index) return;
@@ -284,16 +319,24 @@ class _CustomBottomNavBarState extends State<CustomBottomNavBar> {
             curve: Curves.easeOut,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isSelected
-                  ? neonGreen.withOpacity(0.15)
-                  : Colors.transparent,
+              color:
+                  isSelected ? neonGreen.withOpacity(0.25) : Colors.transparent,
               borderRadius: BorderRadius.circular(16),
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: neonGreen.withOpacity(0.3),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
             ),
             child: Image.asset(
               isSelected ? activeIcon : inactiveIcon,
               width: 24,
               height: 24,
-              color: isSelected ? neonGreen : lightGray,
+              color: isSelected ? Colors.white : lightGray,
             ),
           ),
         ),

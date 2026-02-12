@@ -20,6 +20,37 @@ class ReviewService {
     }
   }
 
+  /// Get venue rating (for display in home/list screens)
+  static Future<double> getVenueRating({
+    required String venueId,
+    required String venueType,
+  }) async {
+    try {
+      await init();
+
+      final key = '${venueType}_${venueId}';
+      final cachedData = _box?.get(key);
+
+      if (cachedData != null && cachedData is List && cachedData.isNotEmpty) {
+        final List<Review> reviews = cachedData
+            .map((e) => Review.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+        final summary = ReviewSummary.fromReviews(reviews);
+        return summary.averageRating;
+      }
+
+      // Generate sample reviews if none exist
+      final reviews = await _generateSampleReviews(venueId, venueType);
+      await _box?.put(key, reviews.map((r) => r.toJson()).toList());
+
+      final summary = ReviewSummary.fromReviews(reviews);
+      return summary.averageRating;
+    } catch (e) {
+      // Return default rating on error
+      return 4.0;
+    }
+  }
+
   /// Get reviews for a venue
   static Future<Map<String, dynamic>> getReviews({
     required String venueId,
@@ -27,29 +58,29 @@ class ReviewService {
   }) async {
     try {
       await init();
-      
+
       // Check local storage first
       final key = '${venueType}_${venueId}';
       final cachedData = _box?.get(key);
-      
+
       if (cachedData != null) {
         final List<Review> reviews = (cachedData as List)
             .map((e) => Review.fromJson(Map<String, dynamic>.from(e)))
             .toList();
-        
+
         return {
           'success': true,
           'data': reviews,
           'summary': ReviewSummary.fromReviews(reviews),
         };
       }
-      
+
       // Generate sample reviews for demo
       final reviews = await _generateSampleReviews(venueId, venueType);
-      
+
       // Cache locally
       await _box?.put(key, reviews.map((r) => r.toJson()).toList());
-      
+
       return {
         'success': true,
         'data': reviews,
@@ -73,17 +104,18 @@ class ReviewService {
   }) async {
     try {
       await init();
-      
+
       // Get current user - try multiple sources
       Map<String, dynamic>? user;
-      
+
       // Try API first
       final userResult = await ApiService.getCurrentUser();
       if (userResult['success']) {
         user = userResult['data'];
       } else {
         // Fallback to cached profile
-        final cachedProfile = await CacheManager.get<Map<String, dynamic>>('user_profile');
+        final cachedProfile =
+            await CacheManager.get<Map<String, dynamic>>('user_profile');
         if (cachedProfile != null) {
           user = cachedProfile;
         } else {
@@ -93,7 +125,7 @@ class ReviewService {
             final email = userBox.get('email') as String?;
             final name = userBox.get('name') as String?;
             final id = userBox.get('id') as String?;
-            
+
             if (email != null || id != null) {
               user = {
                 '_id': id ?? email ?? 'local_user',
@@ -104,14 +136,14 @@ class ReviewService {
           } catch (_) {}
         }
       }
-      
+
       if (user == null) {
         return {
           'success': false,
           'error': 'Please login to submit a review',
         };
       }
-      
+
       final review = Review(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         venueId: venueId,
@@ -125,24 +157,23 @@ class ReviewService {
         images: images,
         isVerifiedBooking: true, // User has booked if they can submit review
       );
-      
+
       // Get existing reviews
       final key = '${venueType}_${venueId}';
       final existingData = _box?.get(key);
       List<Map<String, dynamic>> allReviews = [];
-      
+
       if (existingData != null) {
         allReviews = List<Map<String, dynamic>>.from(
-          (existingData as List).map((e) => Map<String, dynamic>.from(e))
-        );
+            (existingData as List).map((e) => Map<String, dynamic>.from(e)));
       }
-      
+
       // Add new review at the beginning
       allReviews.insert(0, review.toJson());
-      
+
       // Save back
       await _box?.put(key, allReviews);
-      
+
       return {
         'success': true,
         'data': review,
@@ -232,7 +263,8 @@ class ReviewService {
       String name;
       do {
         name = sampleNames[_random.nextInt(sampleNames.length)];
-      } while (usedNames.contains(name) && usedNames.length < sampleNames.length);
+      } while (
+          usedNames.contains(name) && usedNames.length < sampleNames.length);
       usedNames.add(name);
 
       // Get random comment for the rating
@@ -283,7 +315,7 @@ class ReviewService {
     try {
       final userResult = await ApiService.getCurrentUser();
       if (!userResult['success']) return false;
-      
+
       // For demo, allow reviews without booking verification
       // In production, verify against booking history
       return true;
@@ -300,22 +332,21 @@ class ReviewService {
   }) async {
     try {
       await init();
-      
+
       final key = '${venueType}_${venueId}';
       final existingData = _box?.get(key);
-      
+
       if (existingData == null) {
         return {'success': false, 'error': 'Review not found'};
       }
-      
+
       List<Map<String, dynamic>> reviews = List<Map<String, dynamic>>.from(
-        (existingData as List).map((e) => Map<String, dynamic>.from(e))
-      );
-      
+          (existingData as List).map((e) => Map<String, dynamic>.from(e)));
+
       reviews.removeWhere((r) => r['_id'] == reviewId || r['id'] == reviewId);
-      
+
       await _box?.put(key, reviews);
-      
+
       return {'success': true, 'message': 'Review deleted'};
     } catch (e) {
       return {'success': false, 'error': 'Failed to delete review: $e'};

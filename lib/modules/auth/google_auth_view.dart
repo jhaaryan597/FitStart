@@ -71,7 +71,7 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
             GoogleSignInEvent(idToken: googleResult['idToken']),
           );
         }
-      } else if (googleResult['error'] != 'Sign in cancelled') {
+      } else if (googleResult['error'] != 'Sign in Cancelled') {
         if (mounted) {
           setState(() => _isLoading = false);
           ScaffoldMessenger.of(context).showSnackBar(

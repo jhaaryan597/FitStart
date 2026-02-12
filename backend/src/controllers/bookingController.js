@@ -272,11 +272,11 @@ exports.cancelBooking = async (req, res, next) => {
       });
     }
 
-    // Check if already cancelled
-    if (booking.bookingStatus === 'cancelled') {
+    // Check if already Cancelled
+    if (booking.bookingStatus === 'Cancelled') {
       return res.status(400).json({
         success: false,
-        message: 'Booking is already cancelled',
+        message: 'Booking is already Cancelled',
       });
     }
 
@@ -289,9 +289,9 @@ exports.cancelBooking = async (req, res, next) => {
       });
     }
 
-    booking.bookingStatus = 'cancelled';
+    booking.bookingStatus = 'Cancelled';
     booking.cancellationReason = reason;
-    booking.cancelledAt = Date.now();
+    booking.CancelledAt = Date.now();
     await booking.save();
 
     // Send cancellation notification
@@ -300,7 +300,7 @@ exports.cancelBooking = async (req, res, next) => {
       const fcmToken = user.fcmTokens[0].token;
       await sendNotification(fcmToken, {
         title: 'Booking Cancelled',
-        body: `Your booking at ${booking.venue.name} has been cancelled.`,
+        body: `Your booking at ${booking.venue.name} has been Cancelled.`,
         data: {
           type: 'booking',
           bookingId: booking._id.toString(),
@@ -310,7 +310,7 @@ exports.cancelBooking = async (req, res, next) => {
       await Notification.create({
         user: booking.user,
         title: 'Booking Cancelled',
-        body: `Your booking at ${booking.venue.name} has been cancelled.`,
+        body: `Your booking at ${booking.venue.name} has been Cancelled.`,
         type: 'booking',
         data: {
           bookingId: booking._id.toString(),
@@ -321,7 +321,7 @@ exports.cancelBooking = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Booking cancelled successfully',
+      message: 'Booking Cancelled successfully',
       data: booking,
     });
   } catch (error) {

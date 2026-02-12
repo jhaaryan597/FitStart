@@ -60,17 +60,18 @@ const Color neutral500 = textSecondary;
 const Color neutral700 = textPrimary;
 
 // Card decoration for consistent styling
-BoxDecoration glassyCardDecoration = BoxDecoration(
+// Note: Use glassyCardDecorationBuilder() for runtime decoration to avoid const issues
+BoxDecoration get glassyCardDecoration => BoxDecoration(
   gradient: const LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [glassStart, glassEnd],
   ),
   borderRadius: BorderRadius.circular(borderRadiusSize),
-  border: Border.all(color: borderColor.withOpacity(0.3)),
+  border: Border.all(color: borderColor.withValues(alpha: 0.3)),
   boxShadow: [
     BoxShadow(
-      color: primaryColor.withOpacity(0.08),
+      color: primaryColor.withValues(alpha: 0.08),
       blurRadius: 12,
       offset: const Offset(0, 4),
     ),

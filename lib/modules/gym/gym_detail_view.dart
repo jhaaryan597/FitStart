@@ -6,8 +6,6 @@ import 'package:FitStart/model/gym.dart';
 import 'package:FitStart/modules/gym/gym_membership_view.dart';
 import 'package:FitStart/theme.dart';
 import 'package:FitStart/services/favorites_service.dart';
-import 'package:FitStart/services/ml/interaction_tracker.dart';
-import 'package:FitStart/services/api_service.dart';
 import 'package:FitStart/services/communication_service.dart';
 
 class GymDetailView extends StatefulWidget {
@@ -31,26 +29,6 @@ class _GymDetailViewState extends State<GymDetailView> {
     super.initState();
     _checkFavoriteStatus();
     _generateRandomGymImages();
-    _trackGymView(); // Track gym view for ML recommendations
-  }
-
-  /// Track gym view for ML learning
-  Future<void> _trackGymView() async {
-    try {
-      final userResult = await ApiService.getCurrentUser();
-      if (userResult['success']) {
-        final userId = userResult['data']['_id'] as String?;
-        if (userId != null) {
-          await InteractionTracker.trackView(
-            userId: userId,
-            venueId: widget.gym.id,
-            venueType: 'gym',
-          );
-        }
-      }
-    } catch (e) {
-      print('Error tracking gym view: $e');
-    }
   }
 
   @override
@@ -88,23 +66,6 @@ class _GymDetailViewState extends State<GymDetailView> {
       setState(() {
         _isFavorite = !_isFavorite;
       });
-
-      // Track favorite for ML recommendations
-      try {
-        final userResult = await ApiService.getCurrentUser();
-        if (userResult['success']) {
-          final userId = userResult['data']['_id'] as String?;
-          if (userId != null) {
-            await InteractionTracker.trackFavorite(
-              userId: userId,
-              venueId: widget.gym.id,
-              venueType: 'gym',
-            );
-          }
-        }
-      } catch (e) {
-        print('Error tracking gym favorite: $e');
-      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

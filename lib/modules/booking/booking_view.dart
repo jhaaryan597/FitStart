@@ -6,6 +6,7 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:FitStart/services/api_service.dart';
 import 'package:FitStart/services/booking_availability_service.dart';
 import 'package:FitStart/services/guest_mode_service.dart';
+import 'package:FitStart/services/local_booking_service.dart';
 import 'package:FitStart/model/field_order.dart';
 import 'package:FitStart/model/sport_field.dart';
 import 'package:FitStart/utils/responsive_utils.dart';
@@ -16,8 +17,6 @@ import 'package:FitStart/utils/time_utils.dart';
 import 'package:FitStart/utils/razorpay_service.dart';
 import 'package:FitStart/utils/animation_utils.dart';
 import 'package:FitStart/services/favorites_service.dart';
-import 'package:FitStart/services/ml_recommendation_service.dart';
-import 'package:FitStart/services/ml/interaction_tracker.dart';
 
 class BookingView extends StatefulWidget {
   final SportField field;
@@ -63,8 +62,9 @@ class _BookingViewState extends State<BookingView> {
   bool _isLoadingFavorite = true;
 
   // Determine if this is a gym or venue
-  bool get _isGym => widget.field.category.name.toLowerCase().contains('gym') ||
-                     widget.field.category.name.toLowerCase().contains('fitness');
+  bool get _isGym =>
+      widget.field.category.name.toLowerCase().contains('gym') ||
+      widget.field.category.name.toLowerCase().contains('fitness');
 
   @override
   void initState() {
@@ -80,7 +80,7 @@ class _BookingViewState extends State<BookingView> {
 
     // Check favorite status
     _checkFavoriteStatus();
-    
+
     // Load user email
     _loadUserEmail();
   }
@@ -100,13 +100,16 @@ class _BookingViewState extends State<BookingView> {
 
     setState(() => _isLoadingSlots = true);
 
-    final dateStr = '$_selectedYear-${_selectedMonth.toString().padLeft(2, '0')}-${_selectedDate.toString().padLeft(2, '0')}';
+    final dateStr =
+        '$_selectedYear-${_selectedMonth.toString().padLeft(2, '0')}-${_selectedDate.toString().padLeft(2, '0')}';
     final timeSlots = availableTimeList.map((e) => e.time).toList();
 
     final availability = await BookingAvailabilityService.getDayAvailability(
       venueId: widget.field.id,
       date: dateStr,
-      type: _isGym ? BookingAvailabilityService.gymType : BookingAvailabilityService.venueType,
+      type: _isGym
+          ? BookingAvailabilityService.gymType
+          : BookingAvailabilityService.venueType,
       timeSlots: timeSlots,
       maxCapacity: _isGym ? _getGymCapacity() : null,
     );
@@ -143,14 +146,6 @@ class _BookingViewState extends State<BookingView> {
         _isFavorite = !_isFavorite;
       });
 
-      // Track favorite/unfavorite for ML recommendations
-      if (_isFavorite) {
-        MLRecommendationService.trackFavorite(widget.field.id, 'sports_venue');
-      } else {
-        MLRecommendationService.trackUnfavorite(
-            widget.field.id, 'sports_venue');
-      }
-
       _showSnackBar(
         context,
         _isFavorite ? 'Added to favorites' : 'Removed from favorites',
@@ -164,14 +159,17 @@ class _BookingViewState extends State<BookingView> {
         DateTime(_selectedYear, _selectedMonth, _selectedDate);
 
     // Book the slots in our availability system
-    final dateStr = '$_selectedYear-${_selectedMonth.toString().padLeft(2, '0')}-${_selectedDate.toString().padLeft(2, '0')}';
+    final dateStr =
+        '$_selectedYear-${_selectedMonth.toString().padLeft(2, '0')}-${_selectedDate.toString().padLeft(2, '0')}';
     final userEmail = _userEmail ?? 'guest@fitstart.local';
-    
+
     final bookingResult = await BookingAvailabilityService.bookMultipleSlots(
       venueId: widget.field.id,
       date: dateStr,
       timeSlots: _selectedTimes,
-      type: _isGym ? BookingAvailabilityService.gymType : BookingAvailabilityService.venueType,
+      type: _isGym
+          ? BookingAvailabilityService.gymType
+          : BookingAvailabilityService.venueType,
       userEmail: userEmail,
       maxCapacity: _isGym ? _getGymCapacity() : null,
     );
@@ -203,12 +201,14 @@ class _BookingViewState extends State<BookingView> {
     );
 
     if (mounted) {
+      // Navigate to Transaction History screen with bottom nav bar
       Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => RootView(currentScreen: 1)),
+          MaterialPageRoute(
+              builder: (context) => const RootView(currentScreen: 2)),
           (route) => false);
 
-      _showSnackBar(context, "Payment successful! Order created.");
+      _showSnackBar(context, "Payment successful! Booking confirmed.");
     }
   }
 
@@ -222,7 +222,45 @@ class _BookingViewState extends State<BookingView> {
     try {
       DateTime selectedDateTime =
           DateTime(_selectedYear, _selectedMonth, _selectedDate);
+      final dateStr =
+          '${selectedDateTime.year}-${selectedDateTime.month.toString().padLeft(2, '0')}-${selectedDateTime.day.toString().padLeft(2, '0')}';
 
+      // Create booking data structure (only include non-null values)
+      final bookingData = <String, dynamic>{
+        '_id': 'local_${DateTime.now().millisecondsSinceEpoch}',
+        'venue': {
+          '_id': widget.field.id,
+          'name': widget.field.name,
+          'type': _isGym ? 'Gym' : 'Sport',
+          'address': widget.field.address,
+          'phoneNumber': widget.field.phoneNumber,
+        },
+        'bookingDate': dateStr,
+        'timeSlots': _selectedTimes
+            .map((time) => {
+                  'startTime': time.split(' - ')[0],
+                  'endTime': time.split(' - ').length > 1
+                      ? time.split(' - ')[1]
+                      : time.split(' - ')[0],
+                })
+            .toList(),
+        'pricing': {'totalAmount': _totalBill},
+        'payment': {
+          'method': paymentMethod,
+          'status': paymentStatus == 'paid' ? 'completed' : 'pending',
+          if (razorpayPaymentId != null) 'paymentId': razorpayPaymentId,
+        },
+        'bookingStatus': paymentStatus == 'paid' ? 'confirmed' : 'pending',
+        'createdAt': DateTime.now().toIso8601String(),
+      };
+
+      // Save locally first for immediate display
+      print('💾 Attempting to save booking locally...');
+      await LocalBookingService.saveBooking(bookingData);
+      print('✅ Booking saved locally successfully');
+
+      // Then save to API
+      print('🌐 Attempting to save booking to API...');
       await ApiService.createBooking(
         venueId: widget.field.id,
         date: selectedDateTime,
@@ -239,24 +277,6 @@ class _BookingViewState extends State<BookingView> {
           'razorpay_signature': razorpaySignature,
         },
       );
-
-      // Track booking for ML recommendations
-      try {
-        final userResult = await ApiService.getCurrentUser();
-        if (userResult['success']) {
-          final userId = userResult['data']['_id'] as String?;
-          if (userId != null) {
-            await InteractionTracker.trackBooking(
-              userId: userId,
-              venueId: widget.field.id,
-              venueType: 'sport_field',
-              price: _totalBill.toDouble(),
-            );
-          }
-        }
-      } catch (e) {
-        print('Error tracking booking: $e');
-      }
     } catch (e) {
       print('Error saving order: $e');
     }
@@ -264,7 +284,8 @@ class _BookingViewState extends State<BookingView> {
 
   Future<void> _handlePayAtVenue() async {
     // Check if user is in guest mode
-    final canProceed = await GuestModeService.requireLogin(context, action: 'booking');
+    final canProceed =
+        await GuestModeService.requireLogin(context, action: 'booking');
     if (!canProceed) return;
 
     // Payment will be done at venue
@@ -272,14 +293,17 @@ class _BookingViewState extends State<BookingView> {
         DateTime(_selectedYear, _selectedMonth, _selectedDate);
 
     // Book the slots in our availability system
-    final dateStr = '$_selectedYear-${_selectedMonth.toString().padLeft(2, '0')}-${_selectedDate.toString().padLeft(2, '0')}';
+    final dateStr =
+        '$_selectedYear-${_selectedMonth.toString().padLeft(2, '0')}-${_selectedDate.toString().padLeft(2, '0')}';
     final userEmail = _userEmail ?? 'guest@fitstart.local';
-    
+
     final bookingResult = await BookingAvailabilityService.bookMultipleSlots(
       venueId: widget.field.id,
       date: dateStr,
       timeSlots: _selectedTimes,
-      type: _isGym ? BookingAvailabilityService.gymType : BookingAvailabilityService.venueType,
+      type: _isGym
+          ? BookingAvailabilityService.gymType
+          : BookingAvailabilityService.venueType,
       userEmail: userEmail,
       maxCapacity: _isGym ? _getGymCapacity() : null,
     );
@@ -303,14 +327,16 @@ class _BookingViewState extends State<BookingView> {
 
     // Save to Supabase
     await _saveOrderToSupabase(
-      paymentStatus: 'pay_at_venue',
+      paymentStatus: 'pending',
       paymentMethod: 'pay_at_venue',
     );
 
     if (mounted) {
+      // Navigate to Transaction History screen with bottom nav bar (Order tab)
       Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => RootView(currentScreen: 1)),
+          MaterialPageRoute(
+              builder: (context) => const RootView(currentScreen: 2)),
           (route) => false);
 
       _showSnackBar(context, "Booking confirmed! Pay at venue.");
@@ -533,7 +559,8 @@ class _BookingViewState extends State<BookingView> {
                               ),
                               // const SizedBox(height: 16),
                               GridView.count(
-                                crossAxisCount: ResponsiveUtils.gridCrossAxisCount(
+                                crossAxisCount:
+                                    ResponsiveUtils.gridCrossAxisCount(
                                   context,
                                   mobile: 4,
                                   tablet: 6,
@@ -683,102 +710,128 @@ class _BookingViewState extends State<BookingView> {
                                       ),
                                     )
                                   : GridView.count(
-                                crossAxisCount: 4,
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                crossAxisSpacing: 16,
-                                mainAxisSpacing: 16,
-                                childAspectRatio: _isGym ? 1.5 : 2,
-                                children: availableTimeList.map(
-                                  (e) {
-                                    final isSelected =
-                                        _selectedTimes.contains(e.time);
-                                    
-                                    // Check real-time availability
-                                    final slotInfo = _slotAvailability[e.time];
-                                    final bool isAvailable = slotInfo != null 
-                                        ? slotInfo.status != SlotStatus.full 
-                                        : e.isAvailable;
-                                    final bool isLimited = slotInfo?.status == SlotStatus.limited;
-                                    
-                                    return GestureDetector(
-                                      onTap: () {
-                                        setState(() {
-                                          if (isAvailable) {
-                                            debugPrint(
-                                                "selected time: $_selectedTime");
+                                      crossAxisCount: 4,
+                                      shrinkWrap: true,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      crossAxisSpacing: 16,
+                                      mainAxisSpacing: 16,
+                                      childAspectRatio: _isGym ? 1.5 : 2,
+                                      children: availableTimeList.map(
+                                        (e) {
+                                          final isSelected =
+                                              _selectedTimes.contains(e.time);
 
-                                            if (_selectedTimes
-                                                .contains(e.time)) {
-                                              _selectedTimes.remove(e.time);
-                                              _enableCreateOrderBtn =
-                                                  _selectedTimes.isNotEmpty &&
-                                                      _selectedDate != 0;
-                                              _totalBill -= widget.field.price;
-                                            } else {
-                                              _selectedTimes.add(e.time);
-                                              _enableCreateOrderBtn =
-                                                  _selectedTimes.isNotEmpty &&
-                                                      _selectedDate != 0;
-                                              _totalBill += widget.field.price;
-                                            }
-                                          }
-                                        });
-                                      },
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                            color: (isSelected)
-                                                ? primaryColor100
-                                                : isAvailable
-                                                    ? (isLimited ? Colors.orange.withOpacity(0.1) : Colors.white)
-                                                    : neutral200,
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                            border: Border.all(
-                                                color: (isSelected)
-                                                    ? primaryColor500
-                                                    : isAvailable
-                                                        ? (isLimited ? Colors.orange : neutral200)
-                                                        : neutral200,
-                                                width: 1)),
-                                        alignment: Alignment.center,
-                                        child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Text(
-                                              e.time,
-                                              style: descTextStyle.copyWith(
-                                                color: (isSelected)
-                                                    ? primaryColor500
-                                                    : isAvailable
-                                                        ? neutral700
-                                                        : neutral500,
-                                                fontSize: 13,
+                                          // Check real-time availability
+                                          final slotInfo =
+                                              _slotAvailability[e.time];
+                                          final bool isAvailable =
+                                              slotInfo != null
+                                                  ? slotInfo.status !=
+                                                      SlotStatus.full
+                                                  : e.isAvailable;
+                                          final bool isLimited =
+                                              slotInfo?.status ==
+                                                  SlotStatus.limited;
+
+                                          return GestureDetector(
+                                            onTap: () {
+                                              setState(() {
+                                                if (isAvailable) {
+                                                  debugPrint(
+                                                      "selected time: $_selectedTime");
+
+                                                  if (_selectedTimes
+                                                      .contains(e.time)) {
+                                                    _selectedTimes
+                                                        .remove(e.time);
+                                                    _enableCreateOrderBtn =
+                                                        _selectedTimes
+                                                                .isNotEmpty &&
+                                                            _selectedDate != 0;
+                                                    _totalBill -=
+                                                        widget.field.price;
+                                                  } else {
+                                                    _selectedTimes.add(e.time);
+                                                    _enableCreateOrderBtn =
+                                                        _selectedTimes
+                                                                .isNotEmpty &&
+                                                            _selectedDate != 0;
+                                                    _totalBill +=
+                                                        widget.field.price;
+                                                  }
+                                                }
+                                              });
+                                            },
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                  color: (isSelected)
+                                                      ? primaryColor100
+                                                      : isAvailable
+                                                          ? (isLimited
+                                                              ? Colors.orange
+                                                                  .withOpacity(
+                                                                      0.1)
+                                                              : Colors.white)
+                                                          : neutral200,
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                  border: Border.all(
+                                                      color: (isSelected)
+                                                          ? primaryColor500
+                                                          : isAvailable
+                                                              ? (isLimited
+                                                                  ? Colors
+                                                                      .orange
+                                                                  : neutral200)
+                                                              : neutral200,
+                                                      width: 1)),
+                                              alignment: Alignment.center,
+                                              child: Column(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  Text(
+                                                    e.time,
+                                                    style:
+                                                        descTextStyle.copyWith(
+                                                      color: (isSelected)
+                                                          ? primaryColor500
+                                                          : isAvailable
+                                                              ? neutral700
+                                                              : neutral500,
+                                                      fontSize: 13,
+                                                    ),
+                                                    textAlign: TextAlign.center,
+                                                  ),
+                                                  if (_isGym &&
+                                                      slotInfo != null) ...[
+                                                    const SizedBox(height: 2),
+                                                    Text(
+                                                      slotInfo.displayText,
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        color: slotInfo
+                                                                    .status ==
+                                                                SlotStatus.full
+                                                            ? Colors.red
+                                                            : slotInfo.status ==
+                                                                    SlotStatus
+                                                                        .limited
+                                                                ? Colors.orange
+                                                                : Colors.green,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
                                               ),
-                                              textAlign: TextAlign.center,
                                             ),
-                                            if (_isGym && slotInfo != null) ...[
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                slotInfo.displayText,
-                                                style: TextStyle(
-                                                  fontSize: 10,
-                                                  color: slotInfo.status == SlotStatus.full
-                                                      ? Colors.red
-                                                      : slotInfo.status == SlotStatus.limited
-                                                          ? Colors.orange
-                                                          : Colors.green,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ).toList(),
-                              )
+                                          );
+                                        },
+                                      ).toList(),
+                                    )
                             ],
                           ),
                         ),

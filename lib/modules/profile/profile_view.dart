@@ -6,10 +6,7 @@ import 'package:FitStart/services/api_service.dart';
 import 'package:FitStart/core/cache/cache_manager.dart';
 import 'package:FitStart/modules/setting/settings_view.dart';
 import 'package:FitStart/modules/notification/notification_view.dart';
-import 'package:FitStart/modules/chat/chat_inbox_view.dart';
-import 'package:FitStart/modules/transaction/transaction_history_view.dart';
 import 'package:FitStart/modules/favorites/favorites_view.dart';
-import 'package:FitStart/modules/partner/become_partner_view.dart';
 import 'package:FitStart/services/profile_image_service.dart';
 import 'package:FitStart/services/google_auth_service.dart';
 import 'package:FitStart/services/guest_mode_service.dart';
@@ -55,13 +52,15 @@ class _ProfileViewState extends State<ProfileView> {
       final userBox = await Hive.openBox('user_cache');
       final cachedId = userBox.get('id') as String?;
       if (cachedId != null) return cachedId;
-      
+
       // Try user_profile cache
-      final cachedProfile = await CacheManager.get<Map<String, dynamic>>('user_profile');
+      final cachedProfile =
+          await CacheManager.get<Map<String, dynamic>>('user_profile');
       if (cachedProfile != null) {
-        return cachedProfile['_id'] as String? ?? cachedProfile['id'] as String?;
+        return cachedProfile['_id'] as String? ??
+            cachedProfile['id'] as String?;
       }
-      
+
       return null;
     } catch (e) {
       return null;
@@ -80,12 +79,24 @@ class _ProfileViewState extends State<ProfileView> {
       if (mounted) {
         setState(() {
           _username = (cachedProfile['username'] as String?) ??
-                     (cachedProfile['name'] as String?) ?? 'No username set';
+              (cachedProfile['name'] as String?) ??
+              'No username set';
           _email = cachedProfile['email'] ?? '';
           _profileImageUrl = cachedProfile['profileImage'] as String?;
-          _userId = cachedProfile['_id'] as String? ?? cachedProfile['id'] as String?;
+          _userId =
+              cachedProfile['_id'] as String? ?? cachedProfile['id'] as String?;
         });
       }
+
+      // Check for locally stored preset avatar (overrides server image)
+      final box = await Hive.openBox('user_profile_local');
+      final presetAvatar = box.get('preset_avatar') as String?;
+      if (presetAvatar != null && mounted) {
+        setState(() {
+          _profileImageUrl = presetAvatar;
+        });
+      }
+
       return; // Don't fetch from API
     }
 
@@ -98,19 +109,20 @@ class _ProfileViewState extends State<ProfileView> {
       final result = await ApiService.getCurrentUser();
       if (result['success']) {
         final data = result['data'];
-        
+
         // Cache the profile data
         await CacheManager.set('user_profile', data);
-        
+
         // Also save to user_cache for quick access
         final userBox = await Hive.openBox('user_cache');
         await userBox.put('id', data['_id'] ?? data['id']);
         await userBox.put('email', data['email']);
-        
+
         if (mounted) {
           setState(() {
             _username = (data['username'] as String?) ??
-                       (data['name'] as String?) ?? 'No username set';
+                (data['name'] as String?) ??
+                'No username set';
             _email = data['email'] ?? '';
             _profileImageUrl = data['profileImage'] as String?;
             _userId = data['_id'] as String? ?? data['id'] as String?;
@@ -241,31 +253,13 @@ class _ProfileViewState extends State<ProfileView> {
     });
 
     try {
-      // Get user ID from cache first (no auth required)
-      String? userId = _userId ?? await _getUserIdFromCache();
-      
-      if (userId == null) {
-        // Fallback to API only if cache is empty
-        final result = await ApiService.getCurrentUser();
-        if (!result['success']) {
-          // Use email as fallback identifier
-          userId = _email.isNotEmpty ? _email : 'local_user';
-        } else {
-          userId = result['data']['_id'] as String?;
-        }
-      }
-      
-      userId ??= 'local_user';
-      
-      // Save preset avatar path directly (no upload needed for assets)
-      await ProfileImageService.saveProfileImageUrl(userId, assetPath);
+      // Store preset avatar locally only (don't sync to backend)
+      // Preset avatars are local assets, not cloud URLs
+      final box = await Hive.openBox('user_profile_local');
+      await box.put('preset_avatar', assetPath);
 
-      // Update cache with new profile image
-      final cachedProfile = await CacheManager.get<Map<String, dynamic>>('user_profile');
-      if (cachedProfile != null) {
-        cachedProfile['profileImage'] = assetPath;
-        await CacheManager.set('user_profile', cachedProfile);
-      }
+      // Update local cache to show the avatar immediately
+      await CacheManager.delete('user_profile');
 
       setState(() {
         _profileImageUrl = assetPath;
@@ -323,7 +317,7 @@ class _ProfileViewState extends State<ProfileView> {
     try {
       // Get user ID from cache first (no auth required)
       String? userId = _userId ?? await _getUserIdFromCache();
-      
+
       if (userId == null) {
         // Fallback to API only if cache is empty
         final result = await ApiService.getCurrentUser();
@@ -334,7 +328,7 @@ class _ProfileViewState extends State<ProfileView> {
           userId = result['data']['_id'] as String?;
         }
       }
-      
+
       userId ??= 'local_user';
       _showSnack('Uploading image...');
 
@@ -343,21 +337,23 @@ class _ProfileViewState extends State<ProfileView> {
           await ProfileImageService.uploadProfileImage(imageFile, userId);
 
       if (imageUrl != null) {
-        // Save URL to database
-        await ProfileImageService.saveProfileImageUrl(userId, imageUrl);
+        // Update profile with new image URL
+        final result = await ApiService.updateProfile(
+          profileImage: imageUrl,
+        );
 
-        // Update cache with new profile image
-        final cachedProfile = await CacheManager.get<Map<String, dynamic>>('user_profile');
-        if (cachedProfile != null) {
-          cachedProfile['profileImage'] = imageUrl;
-          await CacheManager.set('user_profile', cachedProfile);
+        if (result['success']) {
+          // Invalidate cache
+          await CacheManager.delete('user_profile');
+
+          setState(() {
+            _profileImageUrl = imageUrl;
+          });
+
+          _showSnack('Profile picture updated!');
+        } else {
+          _showSnack('Failed to update profile: ${result['message']}');
         }
-
-        setState(() {
-          _profileImageUrl = imageUrl;
-        });
-
-        _showSnack('Profile picture updated!');
       } else {
         _showSnack('Failed to upload image');
       }
@@ -403,7 +399,7 @@ class _ProfileViewState extends State<ProfileView> {
                 ),
                 Text('Edit Profile', style: titleTextStyle),
                 const SizedBox(height: 16),
-                
+
                 // Name field - editable
                 TextField(
                   controller: nameController,
@@ -414,7 +410,7 @@ class _ProfileViewState extends State<ProfileView> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Email section - Google OAuth only
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -428,7 +424,8 @@ class _ProfileViewState extends State<ProfileView> {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.email, color: primaryColor500, size: 20),
+                          const Icon(Icons.email,
+                              color: primaryColor500, size: 20),
                           const SizedBox(width: 8),
                           Text(
                             'Email Address',
@@ -443,7 +440,9 @@ class _ProfileViewState extends State<ProfileView> {
                       Text(
                         _email.isEmpty ? 'No email set' : _email,
                         style: TextStyle(
-                          color: _email.isEmpty ? Colors.grey.shade600 : textPrimary,
+                          color: _email.isEmpty
+                              ? Colors.grey.shade600
+                              : textPrimary,
                           fontSize: 16,
                         ),
                       ),
@@ -451,13 +450,16 @@ class _ProfileViewState extends State<ProfileView> {
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
-                          onPressed: _saving ? null : () => _updateEmailViaGoogle(ctx),
+                          onPressed:
+                              _saving ? null : () => _updateEmailViaGoogle(ctx),
                           icon: Image.asset(
                             'assets/icons/google_logo.png',
                             height: 20,
                             width: 20,
                           ),
-                          label: Text(_email.isEmpty ? 'Set Email via Google' : 'Update Email via Google'),
+                          label: Text(_email.isEmpty
+                              ? 'Set Email via Google'
+                              : 'Update Email via Google'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: textPrimary,
                             side: const BorderSide(color: primaryColor500),
@@ -476,7 +478,7 @@ class _ProfileViewState extends State<ProfileView> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Save button - only for name changes
                 SizedBox(
                   width: double.infinity,
@@ -512,7 +514,8 @@ class _ProfileViewState extends State<ProfileView> {
                                 Navigator.of(ctx).maybePop();
                                 _showSnack('Name updated successfully!');
                               } else {
-                                _showSnack('Failed to update name: ${result['message']}');
+                                _showSnack(
+                                    'Failed to update name: ${result['message']}');
                               }
                             } catch (e) {
                               _showSnack('Error updating name: $e');
@@ -543,36 +546,37 @@ class _ProfileViewState extends State<ProfileView> {
   /// Update email through Google OAuth authentication
   Future<void> _updateEmailViaGoogle(BuildContext ctx) async {
     setState(() => _saving = true);
-    
+
     try {
       _showSnack('Initiating Google authentication...');
-      
+
       // Start Google Sign-In process
-      final googleResult = await GoogleAuthService.signInWithGoogle(forceAccountPicker: true);
-      
+      final googleResult =
+          await GoogleAuthService.signInWithGoogle(forceAccountPicker: true);
+
       if (!googleResult['success']) {
         _showSnack('Google authentication failed: ${googleResult['error']}');
         return;
       }
-      
+
       final newEmail = googleResult['email'] as String;
       final idToken = googleResult['idToken'] as String;
-      
+
       // Send the ID token to backend for email update verification
       final result = await ApiService.updateEmailViaGoogle(
         idToken: idToken,
         newEmail: newEmail,
       );
-      
+
       if (result['success']) {
         // Invalidate cache to force refresh
         await CacheManager.delete('user_profile');
-        
+
         // Update local state
         setState(() {
           _email = newEmail;
         });
-        
+
         if (!mounted) return;
         Navigator.of(ctx).maybePop();
         _showSnack('Email updated successfully via Google authentication!');
@@ -600,7 +604,7 @@ class _ProfileViewState extends State<ProfileView> {
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(0),
+        padding: const EdgeInsets.only(bottom: 120),
         children: [
           // Title
           Padding(
@@ -690,19 +694,6 @@ class _ProfileViewState extends State<ProfileView> {
           // Menu Items
           _buildMenuItem(
             context,
-            icon: Icons.sync_alt,
-            title: 'Booking and Transactions',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) =>
-                      const TransactionHistoryView(initialTab: 1),
-                ),
-              );
-            },
-          ),
-          _buildMenuItem(
-            context,
             icon: Icons.favorite_border,
             title: 'Favorites',
             onTap: () {
@@ -730,9 +721,11 @@ class _ProfileViewState extends State<ProfileView> {
             icon: Icons.chat_bubble_outline,
             title: 'Messages',
             onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const ChatInboxView(),
+              // Chat feature removed
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Chat feature coming soon!'),
+                  duration: Duration(seconds: 2),
                 ),
               );
             },
@@ -742,9 +735,11 @@ class _ProfileViewState extends State<ProfileView> {
             icon: Icons.business_center,
             title: 'Become a Partner',
             onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const BecomePartnerView(),
+              // Become a partner feature coming soon
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Become a partner feature coming soon!'),
+                  duration: Duration(seconds: 2),
                 ),
               );
             },

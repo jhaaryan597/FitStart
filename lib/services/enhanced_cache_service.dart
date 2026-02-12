@@ -25,7 +25,7 @@ class EnhancedCacheService {
       final List<dynamic> jsonList = jsonDecode(jsonString);
       return jsonList.map((json) => _sportFieldFromJson(json)).toList();
     } catch (e) {
-      print('❌ Error getting cached sport fields: $e');
+      // // print('❌ Error getting cached sport fields: $e');
       return null;
     }
   }
@@ -36,7 +36,7 @@ class EnhancedCacheService {
       final jsonString = jsonEncode(jsonList);
       await CacheManager.set(CacheKeys.sportFields, jsonString);
     } catch (e) {
-      print('❌ Error caching sport fields: $e');
+      // // print('❌ Error caching sport fields: $e');
     }
   }
 
@@ -54,7 +54,7 @@ class EnhancedCacheService {
       final List<dynamic> jsonList = jsonDecode(jsonString);
       return jsonList.map((json) => _gymFromJson(json)).toList();
     } catch (e) {
-      print('❌ Error getting cached gyms: $e');
+      // // print('❌ Error getting cached gyms: $e');
       return null;
     }
   }
@@ -65,7 +65,7 @@ class EnhancedCacheService {
       final jsonString = jsonEncode(jsonList);
       await CacheManager.set(CacheKeys.gyms, jsonString);
     } catch (e) {
-      print('❌ Error caching gyms: $e');
+      // // print('❌ Error caching gyms: $e');
     }
   }
 
@@ -83,7 +83,7 @@ class EnhancedCacheService {
       final List<dynamic> jsonList = jsonDecode(jsonString);
       return jsonList.cast<String>();
     } catch (e) {
-      print('❌ Error getting cached favorites: $e');
+      // // print('❌ Error getting cached favorites: $e');
       return null;
     }
   }
@@ -93,7 +93,7 @@ class EnhancedCacheService {
       final jsonString = jsonEncode(favoriteIds);
       await CacheManager.set(CacheKeys.favorites, jsonString);
     } catch (e) {
-      print('❌ Error caching favorites: $e');
+      // // print('❌ Error caching favorites: $e');
     }
   }
 
@@ -115,7 +115,7 @@ class EnhancedCacheService {
       final List<dynamic> jsonList = jsonDecode(jsonString);
       return jsonList.map((json) => NotificationItem.fromJson(json)).toList();
     } catch (e) {
-      print('❌ Error getting cached notifications: $e');
+      // // print('❌ Error getting cached notifications: $e');
       return null;
     }
   }
@@ -126,7 +126,7 @@ class EnhancedCacheService {
       final jsonString = jsonEncode(jsonList);
       await CacheManager.set(CacheKeys.notifications, jsonString);
     } catch (e) {
-      print('❌ Error caching notifications: $e');
+      // // print('❌ Error caching notifications: $e');
     }
   }
 
@@ -149,7 +149,7 @@ class EnhancedCacheService {
       final List<dynamic> jsonList = jsonDecode(jsonString);
       return jsonList.map((json) => _sportFieldFromJson(json)).toList();
     } catch (e) {
-      print('❌ Error getting cached recommended venues: $e');
+      // // print('❌ Error getting cached recommended venues: $e');
       return null;
     }
   }
@@ -160,7 +160,7 @@ class EnhancedCacheService {
       final jsonString = jsonEncode(jsonList);
       await CacheManager.set(CacheKeys.recommendedVenues, jsonString);
     } catch (e) {
-      print('❌ Error caching recommended venues: $e');
+      // // print('❌ Error caching recommended venues: $e');
     }
   }
 
@@ -176,7 +176,7 @@ class EnhancedCacheService {
       final List<dynamic> jsonList = jsonDecode(jsonString);
       return jsonList.map((json) => _gymFromJson(json)).toList();
     } catch (e) {
-      print('❌ Error getting cached recommended gyms: $e');
+      // // print('❌ Error getting cached recommended gyms: $e');
       return null;
     }
   }
@@ -187,7 +187,7 @@ class EnhancedCacheService {
       final jsonString = jsonEncode(jsonList);
       await CacheManager.set(CacheKeys.recommendedGyms, jsonString);
     } catch (e) {
-      print('❌ Error caching recommended gyms: $e');
+      // // print('❌ Error caching recommended gyms: $e');
     }
   }
 
@@ -205,7 +205,7 @@ class EnhancedCacheService {
       final List<dynamic> jsonList = jsonDecode(jsonString);
       return jsonList.map((json) => _sportFieldFromJson(json)).toList();
     } catch (e) {
-      print('❌ Error getting cached search results: $e');
+      // // print('❌ Error getting cached search results: $e');
       return null;
     }
   }
@@ -216,7 +216,7 @@ class EnhancedCacheService {
       final jsonString = jsonEncode(jsonList);
       await CacheManager.set(CacheKeys.searchResults(query), jsonString);
     } catch (e) {
-      print('❌ Error caching search results: $e');
+      // // print('❌ Error caching search results: $e');
     }
   }
 

@@ -202,10 +202,12 @@ exports.getMe = async (req, res, next) => {
 // @access  Private
 exports.updateDetails = async (req, res, next) => {
   try {
-    const fieldsToUpdate = {
-      username: req.body.username,
-      phoneNumber: req.body.phoneNumber,
-    };
+    const fieldsToUpdate = {};
+    
+    // Only update fields that are provided
+    if (req.body.username !== undefined) fieldsToUpdate.username = req.body.username;
+    if (req.body.phoneNumber !== undefined) fieldsToUpdate.phoneNumber = req.body.phoneNumber;
+    if (req.body.profileImage !== undefined) fieldsToUpdate.profileImage = req.body.profileImage;
 
     const user = await User.findByIdAndUpdate(req.user.id, fieldsToUpdate, {
       new: true,
@@ -330,6 +332,76 @@ exports.deleteAccount = async (req, res, next) => {
       message: 'Account deleted successfully',
     });
   } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Upload profile image
+// @route   POST /api/v1/auth/upload-profile-image
+// @access  Private
+exports.uploadProfileImage = async (req, res, next) => {
+  try {
+    if (!req.files || !req.files.image) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please upload an image file',
+      });
+    }
+
+    const file = req.files.image;
+
+    // Check file type
+    if (!file.mimetype.startsWith('image/')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please upload an image file',
+      });
+    }
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      return res.status(400).json({
+        success: false,
+        message: 'Image size should be less than 5MB',
+      });
+    }
+
+    // Upload to Cloudinary
+    const { uploadImage, deleteImage } = require('../config/cloudinary');
+
+    // Get current user to check if they have an existing profile image
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    // Delete old profile image if exists
+    if (user.profileImage && user.profileImage.includes('cloudinary')) {
+      // Extract public ID from Cloudinary URL
+      const publicId = user.profileImage.split('/').pop().split('.')[0];
+      if (publicId) {
+        await deleteImage(`fitstart/profiles/${publicId}`);
+      }
+    }
+
+    // Upload new image
+    const result = await uploadImage(file.tempFilePath, 'fitstart/profiles');
+
+    // Update user profile
+    user.profileImage = result.url;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        profileImage: result.url,
+      },
+    });
+  } catch (error) {
+    console.error('Profile image upload error:', error);
     next(error);
   }
 };

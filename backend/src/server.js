@@ -14,7 +14,6 @@ const errorHandler = require('./middleware/error');
 const authRoutes = require('./routes/authRoutes');
 const venueRoutes = require('./routes/venueRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
-const chatRoutes = require('./routes/chatRoutes');
 
 // Initialize express app
 const app = express();
@@ -62,7 +61,6 @@ const API_VERSION = process.env.API_VERSION || 'v1';
 app.use(`/api/${API_VERSION}/auth`, authRoutes);
 app.use(`/api/${API_VERSION}/venues`, venueRoutes);
 app.use(`/api/${API_VERSION}/bookings`, bookingRoutes);
-app.use(`/api/${API_VERSION}/chat`, chatRoutes);
 
 // 404 handler
 app.use((req, res, next) => {

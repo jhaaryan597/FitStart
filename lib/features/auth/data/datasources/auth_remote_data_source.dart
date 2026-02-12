@@ -3,9 +3,9 @@
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../../../core/error/exceptions.dart';
+import '../../../../core/config/api_config.dart';
 import '../../../../services/google_auth_service.dart';
 import '../models/user_model.dart';
 
@@ -24,27 +24,12 @@ abstract class AuthRemoteDataSource {
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   final http.Client client;
 
-  static const String _baseUrlDev = 'http://localhost:3000/api/v1';
-  static const String _baseUrlAndroidDevice = 'http://10.50.84.235:3000/api/v1';
-
-  // Railway production URL
-  static const String _baseUrlProd = 'https://fitstart-backend-production.up.railway.app/api/v1';
-
   AuthRemoteDataSourceImpl({
     required this.client,
   });
 
-  String get baseUrl {
-    // If production URL is configured (not default), always use it
-    if (_baseUrlProd != 'https://your-railway-app.up.railway.app/api/v1') {
-      return _baseUrlProd;
-    }
-
-    // For development/testing
-    return defaultTargetPlatform == TargetPlatform.android
-        ? _baseUrlAndroidDevice
-        : _baseUrlDev;
-  }
+  /// Get base URL from centralized config
+  String get baseUrl => ApiConfig.baseUrl;
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
@@ -65,6 +50,12 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     await authBox.put('jwt_token', token);
     await authBox.put('user_data', user.toJson());
     await authBox.put('last_login', DateTime.now().toIso8601String());
+
+    // Also save to user_cache for LocalBookingService and other services
+    final userBox = await Hive.openBox('user_cache');
+    await userBox.put('id', user.id);
+    await userBox.put('email', user.email);
+    AppLogger.success('User email cached: ${user.email}');
   }
 
   @override
@@ -148,7 +139,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   @override
   Future<UserModel> googleSignIn({required String idToken}) async {
     try {
-      print('📤 Sending Google Sign-In request to: $baseUrl/auth/google');
+      AppLogger.network('POST', '$baseUrl/auth/google');
       final response = await client.post(
         Uri.parse('$baseUrl/auth/google'),
         headers: _headers,
@@ -157,15 +148,14 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         }),
       );
 
-      print('📥 Response status: ${response.statusCode}');
-      print('📥 Response body: ${response.body}');
+      AppLogger.network('Response', '$baseUrl/auth/google', statusCode: response.statusCode, body: response.body);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final responseData = jsonDecode(response.body);
-        
+
         // Handle nested response structure: {success: true, data: {user: ..., token: ...}}
         final data = responseData['data'] ?? responseData;
-        
+
         // Check if data has expected fields
         if (data['token'] == null) {
           throw AuthException('Server response missing token field');
@@ -173,13 +163,13 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         if (data['user'] == null) {
           throw AuthException('Server response missing user field');
         }
-        
+
         final user = UserModel.fromJson(data['user']);
         final token = data['token'];
-        
+
         // Save to Hive for persistence
         await _saveUserToHive(user, token);
-        
+
         return user;
       } else {
         final error = jsonDecode(response.body);
@@ -187,7 +177,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       }
     } catch (e) {
       if (e is AuthException) rethrow;
-      print('❌ Google Sign-In error: $e');
+      AppLogger.error('Google Sign-In error', e);
       throw AuthException('Network error: $e');
     }
   }
@@ -226,7 +216,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     try {
       final authBox = await Hive.openBox('fitstart_auth');
       final token = authBox.get('jwt_token') as String?;
-      
+
       if (token == null) {
         throw AuthException('Not authenticated');
       }

@@ -216,7 +216,7 @@ class _NotificationViewState extends State<NotificationView> {
               : RefreshIndicator(
                   onRefresh: _loadNotifications,
                   child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 136),
                     itemCount: _notifications.length,
                     itemBuilder: (context, index) {
                       final notification = _notifications[index];

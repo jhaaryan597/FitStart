@@ -72,7 +72,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<void> _onGoogleSignIn(
       GoogleSignInEvent event, Emitter<AuthState> emit) async {
-    print('🔐 AuthBloc: Starting Google Sign-In with idToken: ${event.idToken.substring(0, 20)}...');
+    // Starting Google Sign-In
     emit(AuthLoading());
 
     final result = await googleSignInUseCase(
@@ -81,11 +81,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     result.fold(
       (failure) {
-        print('❌ AuthBloc: Google Sign-In failed: ${failure.message}');
         emit(AuthError(message: failure.message));
       },
       (user) {
-        print('✅ AuthBloc: Google Sign-In successful for user: ${user.email}');
         emit(Authenticated(user: user));
       },
     );

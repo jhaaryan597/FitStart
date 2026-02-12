@@ -43,7 +43,7 @@ class LocationService {
           altitudeAccuracy: (data['altitudeAccuracy'] as num).toDouble(),
           headingAccuracy: (data['headingAccuracy'] as num).toDouble(),
         );
-        print('✅ Loaded cached position from storage');
+        // // print('✅ Loaded cached position from storage');
       }
       
       final address = await CacheManager.get(
@@ -54,7 +54,7 @@ class LocationService {
         _lastKnownAddress = address;
       }
     } catch (e) {
-      print('⚠️  Error loading cached position: $e');
+      // // print('⚠️  Error loading cached position: $e');
       // Clear corrupted cache
       await CacheManager.delete(_cacheKeyPosition);
       await CacheManager.delete(_cacheKeyAddress);
@@ -86,7 +86,7 @@ class LocationService {
       
       _lastKnownPosition = position;
     } catch (e) {
-      print('⚠️  Error caching position: $e');
+      // // print('⚠️  Error caching position: $e');
     }
   }
 
@@ -103,7 +103,7 @@ class LocationService {
   static Future<bool> ensurePermission() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      print('❌ Location services are disabled');
+      // // print('❌ Location services are disabled');
       return false; // User must enable in settings
     }
 
@@ -111,13 +111,13 @@ class LocationService {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        print('❌ Location permission denied');
+        // // print('❌ Location permission denied');
         return false;
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      print('❌ Location permission denied forever');
+      // // print('❌ Location permission denied forever');
       return false;
     }
 
@@ -142,7 +142,7 @@ class LocationService {
     if (!forceRefresh && _lastKnownPosition != null) {
       final age = DateTime.now().difference(_lastKnownPosition!.timestamp);
       if (age.inMinutes < 30) { // Cache valid for 30 minutes
-        print('✅ Using cached position (${age.inMinutes}m old)');
+        // // print('✅ Using cached position (${age.inMinutes}m old)');
         return _lastKnownPosition;
       }
     }
@@ -151,14 +151,14 @@ class LocationService {
     if (!ok) {
       // If permission denied, return last known position if available
       if (_lastKnownPosition != null) {
-        print('⚠️  Permission denied, using cached position');
+        // // print('⚠️  Permission denied, using cached position');
         return _lastKnownPosition;
       }
       return null;
     }
     
     try {
-      print('🌍 Fetching fresh GPS position...');
+      // // print('🌍 Fetching fresh GPS position...');
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 10), // Timeout after 10 seconds
@@ -177,19 +177,19 @@ class LocationService {
           if (address.startsWith(',')) address = address.substring(1).trim();
         }
       } catch (e) {
-        print('⚠️  Could not get address: $e');
+        // // print('⚠️  Could not get address: $e');
       }
       
       // Cache the position
       await _cachePosition(position, address);
       
-      print('✅ Fresh position acquired and cached');
+      // // print('✅ Fresh position acquired and cached');
       return position;
     } catch (e) {
-      print('❌ Error getting current position: $e');
+      // // print('❌ Error getting current position: $e');
       // Return last known position as fallback
       if (_lastKnownPosition != null) {
-        print('⚠️  Using fallback cached position');
+        // // print('⚠️  Using fallback cached position');
         return _lastKnownPosition;
       }
       return null;
@@ -206,7 +206,7 @@ class LocationService {
       );
       return placemarks.first;
     } catch (e) {
-      print('❌ Error getting placemark: $e');
+      // // print('❌ Error getting placemark: $e');
       return null;
     }
   }
@@ -231,10 +231,10 @@ class LocationService {
         );
         
         await _cachePosition(position, address);
-        print('✅ Location set from address: $address');
+        // // print('✅ Location set from address: $address');
       }
     } catch (e) {
-      print('❌ Error setting location from address: $e');
+      // // print('❌ Error setting location from address: $e');
     }
   }
 
@@ -245,7 +245,7 @@ class LocationService {
     await CacheManager.delete(_cacheKeyPosition);
     await CacheManager.delete(_cacheKeyAddress);
     await CacheManager.delete(_cacheKeyPermissionStatus);
-    print('✅ Location cache cleared');
+    // // print('✅ Location cache cleared');
   }
 
   static double distanceInKm(
@@ -253,5 +253,36 @@ class LocationService {
     final meters =
         Geolocator.distanceBetween(startLat, startLng, endLat, endLng);
     return meters / 1000.0;
+  }
+
+  /// Format a placemark into a readable address string
+  static String formatAddress(Placemark placemark) {
+    final components = <String>[];
+
+    if (placemark.name != null && placemark.name!.isNotEmpty) {
+      components.add(placemark.name!);
+    }
+
+    if (placemark.street != null && placemark.street!.isNotEmpty) {
+      components.add(placemark.street!);
+    }
+
+    if (placemark.subLocality != null && placemark.subLocality!.isNotEmpty) {
+      components.add(placemark.subLocality!);
+    }
+
+    if (placemark.locality != null && placemark.locality!.isNotEmpty) {
+      components.add(placemark.locality!);
+    }
+
+    if (placemark.administrativeArea != null && placemark.administrativeArea!.isNotEmpty) {
+      components.add(placemark.administrativeArea!);
+    }
+
+    if (placemark.country != null && placemark.country!.isNotEmpty) {
+      components.add(placemark.country!);
+    }
+
+    return components.join(', ');
   }
 }

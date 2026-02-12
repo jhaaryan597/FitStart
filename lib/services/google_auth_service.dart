@@ -30,10 +30,10 @@ class GoogleAuthService {
       
       if (googleUser == null) {
         // User canceled the sign-in
-        developer.log('Google Sign-In cancelled by user');
+        developer.log('Google Sign-In Cancelled by user');
         return {
           'success': false,
-          'error': 'Sign in cancelled',
+          'error': 'Sign in Cancelled',
         };
       }
 
@@ -66,7 +66,7 @@ class GoogleAuthService {
       } else if (e.code == 'network_error') {
         errorMessage = 'Network error. Please check your internet connection.';
       } else if (e.code == 'sign_in_canceled') {
-        errorMessage = 'Sign in cancelled';
+        errorMessage = 'Sign in Cancelled';
       }
       
       return {

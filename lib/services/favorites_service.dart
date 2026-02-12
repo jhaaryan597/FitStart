@@ -27,7 +27,7 @@ class FavoritesService {
         await EnhancedCacheService.cacheFavoriteIds(_cachedFavoriteIds!);
       }
     } catch (e) {
-      print('❌ Error initializing favorites: $e');
+      // print('❌ Error initializing favorites: $e');
       _cachedFavoriteIds = [];
     }
   }
@@ -41,7 +41,7 @@ class FavoritesService {
       
       return _cachedFavoriteIds?.contains(venueId) ?? false;
     } catch (e) {
-      print('❌ Error checking favorite: $e');
+      // print('❌ Error checking favorite: $e');
       return false;
     }
   }
@@ -72,13 +72,13 @@ class FavoritesService {
           await ApiService.addToFavorites(venueId);
         }
       } catch (e) {
-        print('⚠️  API call failed, using local storage: $e');
+        // print('⚠️  API call failed, using local storage: $e');
         // API failed but local storage updated - this is okay for offline support
       }
       
       return true; // Always return true since local storage works
     } catch (e) {
-      print('❌ Error toggling favorite: $e');
+      // print('❌ Error toggling favorite: $e');
       return false;
     }
   }
@@ -101,12 +101,12 @@ class FavoritesService {
       try {
         await ApiService.addToFavorites(venueId);
       } catch (e) {
-        print('⚠️  API call failed: $e');
+        // print('⚠️  API call failed: $e');
       }
       
       return true;
     } catch (e) {
-      print('❌ Error adding favorite: $e');
+      // print('❌ Error adding favorite: $e');
       return false;
     }
   }
@@ -125,12 +125,12 @@ class FavoritesService {
       try {
         await ApiService.removeFromFavorites(venueId);
       } catch (e) {
-        print('⚠️  API call failed: $e');
+        // print('⚠️  API call failed: $e');
       }
       
       return true;
     } catch (e) {
-      print('❌ Error removing favorite: $e');
+      // print('❌ Error removing favorite: $e');
       return false;
     }
   }
@@ -143,7 +143,7 @@ class FavoritesService {
       
       return List<String>.from(_cachedFavoriteIds ?? []);
     } catch (e) {
-      print('❌ Error getting favorites: $e');
+      // print('❌ Error getting favorites: $e');
       return [];
     }
   }
@@ -160,7 +160,7 @@ class FavoritesService {
         await EnhancedCacheService.cacheFavoriteIds(_cachedFavoriteIds!);
       }
     } catch (e) {
-      print('❌ Error saving favorites: $e');
+      // print('❌ Error saving favorites: $e');
     }
   }
   
@@ -179,10 +179,10 @@ class FavoritesService {
         _cachedFavoriteIds = merged;
         await _saveToLocalStorage();
         
-        print('✅ Synced favorites with server');
+        // print('✅ Synced favorites with server');
       }
     } catch (e) {
-      print('❌ Error syncing with server: $e');
+      // print('❌ Error syncing with server: $e');
     }
   }
   

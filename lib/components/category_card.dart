@@ -7,6 +7,10 @@ import '../utils/responsive_utils.dart';
 import '../utils/animation_utils.dart';
 
 class CategoryListView extends StatelessWidget {
+  final Function(String)? onCategorySelected;
+
+  const CategoryListView({Key? key, this.onCategorySelected}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     List<Widget> categoryList = [];
@@ -15,6 +19,7 @@ class CategoryListView extends StatelessWidget {
         title: sportCategories[i].name,
         imageAsset: sportCategories[i].image,
         index: i,
+        onTap: onCategorySelected,
       ));
     }
     return SingleChildScrollView(
@@ -33,12 +38,14 @@ class CategoryCard extends StatefulWidget {
   final String title;
   final String imageAsset;
   final int index;
+  final Function(String)? onTap;
 
   const CategoryCard({
     Key? key,
     required this.title,
     required this.imageAsset,
     this.index = 0,
+    this.onTap,
   }) : super(key: key);
 
   @override
@@ -126,12 +133,17 @@ class _CategoryCardState extends State<CategoryCard>
                     borderRadius: BorderRadius.circular(borderRadiusSize),
                     splashColor: primaryColor500.withOpacity(0.5),
                     onTap: () {
-                      Navigator.push(context,
-                          MaterialPageRoute(builder: (context) {
-                        return SearchView(
-                          selectedDropdownItem: widget.title,
-                        );
-                      }));
+                      if (widget.onTap != null) {
+                        widget.onTap!(widget.title);
+                      } else {
+                        // Fallback to navigation if no callback provided
+                        Navigator.push(context,
+                            MaterialPageRoute(builder: (context) {
+                          return SearchView(
+                            selectedDropdownItem: widget.title,
+                          );
+                        }));
+                      }
                     },
                     child: Container(
                       width: cardSize,

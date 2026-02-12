@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:FitStart/modules/auth/google_auth_view.dart';
-import 'package:FitStart/modules/onboarding/onboarding_view.dart';
 import 'package:FitStart/modules/root/root_view.dart';
 import 'package:FitStart/theme.dart';
 
@@ -40,17 +39,17 @@ class _SplashViewState extends State<SplashView>
     if (!mounted) return;
 
     final settingsBox = await Hive.openBox('settings');
-    final authBox = await Hive.openBox('auth');
-    
-    final onboardingComplete = settingsBox.get('onboarding_complete', defaultValue: false) as bool;
-    final isGuestMode = settingsBox.get('guest_mode', defaultValue: false) as bool;
+    final authBox =
+        await Hive.openBox('fitstart_auth'); // Fixed: Use correct box name
+
+    final isGuestMode =
+        settingsBox.get('guest_mode', defaultValue: false) as bool;
     final jwtToken = authBox.get('jwt_token') as String?;
 
     // Flow:
     // 1. If logged in (JWT token exists) -> Home
     // 2. If guest mode -> Home (with limited features)
-    // 3. If onboarding not complete -> Onboarding -> Welcome (GoogleAuth)
-    // 4. If onboarding complete but not logged in -> Welcome (GoogleAuth)
+    // 3. Otherwise -> Google Auth (welcome)
 
     if (jwtToken != null) {
       // User is logged in - go directly to home
@@ -58,11 +57,8 @@ class _SplashViewState extends State<SplashView>
     } else if (isGuestMode) {
       // Guest mode - go to home with limited features
       _navigateTo(RootView(currentScreen: 0));
-    } else if (!onboardingComplete) {
-      // Fresh install - show onboarding first
-      _navigateTo(OnboardingView());
     } else {
-      // Onboarding complete but not logged in - show Google auth (welcome)
+      // Not logged in - show Google auth (welcome)
       _navigateTo(const GoogleAuthView());
     }
   }

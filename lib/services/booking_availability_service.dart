@@ -1,5 +1,5 @@
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 
 /// Service for managing real-time booking availability
 /// Handles slot capacity for venues (1 per slot) and gyms (configurable capacity)
@@ -181,7 +181,7 @@ class BookingAvailabilityService {
     await _box?.put(key, bookings);
 
     if (kDebugMode) {
-      print('✅ Booked slot: $key for $userEmail (${currentCount + 1}/$capacity)');
+      debugPrint('✅ Booked slot: $key for $userEmail (${currentCount + 1}/$capacity)');
     }
 
     return BookingResult(
@@ -222,7 +222,7 @@ class BookingAvailabilityService {
     await _box?.put(key, bookings);
 
     if (kDebugMode) {
-      print('✅ Cancelled booking: $key for $userEmail');
+      debugPrint('✅ Cancelled booking: $key for $userEmail');
     }
 
     return true;
@@ -378,7 +378,7 @@ class BookingAvailabilityService {
     }
 
     if (kDebugMode && keysToDelete.isNotEmpty) {
-      print('🗑️ Cleared ${keysToDelete.length} old booking records');
+      debugPrint('🗑️ Cleared ${keysToDelete.length} old booking records');
     }
   }
 }
