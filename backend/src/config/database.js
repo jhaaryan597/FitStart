@@ -27,6 +27,14 @@ const connectDB = async (retryCount = 0) => {
       );
     }
 
+    const isProduction = process.env.NODE_ENV === 'production';
+    const isLocalMongo = /localhost|127\.0\.0\.1|::1/.test(mongoUri);
+    if (isProduction && isLocalMongo) {
+      throw new Error(
+        'Invalid MongoDB URI for production: localhost detected. Set MONGODB_URI to your MongoDB Atlas connection string in Render environment variables.'
+      );
+    }
+
     const conn = await mongoose.connect(mongoUri, {
       // Modern mongoose options
       serverSelectionTimeoutMS: 5000,
