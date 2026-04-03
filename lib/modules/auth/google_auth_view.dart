@@ -33,16 +33,17 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    
+
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _fadeController, curve: Curves.easeOut),
     );
-    
+
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.2),
       end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOutCubic));
-    
+    ).animate(
+        CurvedAnimation(parent: _fadeController, curve: Curves.easeOutCubic));
+
     // Start animation after a brief delay for smooth transition from onboarding
     Future.delayed(const Duration(milliseconds: 100), () {
       if (mounted) {
@@ -59,7 +60,7 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
 
   Future<void> _handleGoogleSignIn() async {
     if (_isLoading) return;
-    
+
     setState(() => _isLoading = true);
 
     try {
@@ -68,8 +69,8 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
       if (googleResult['success']) {
         if (mounted) {
           context.read<AuthBloc>().add(
-            GoogleSignInEvent(idToken: googleResult['idToken']),
-          );
+                GoogleSignInEvent(idToken: googleResult['idToken']),
+              );
         }
       } else if (googleResult['error'] != 'Sign in Cancelled') {
         if (mounted) {
@@ -101,13 +102,13 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
     // Set guest mode flag
     final settingsBox = await Hive.openBox('settings');
     await settingsBox.put('guest_mode', true);
-    
+
     // Set up guest user cache
     final userBox = await Hive.openBox('user_cache');
     await userBox.put('email', 'guest@fitstart.local');
     await userBox.put('name', 'Guest User');
     await userBox.put('id', 'guest_user');
-    
+
     // Cache guest profile
     await CacheManager.set('user_profile', {
       '_id': 'guest_user',
@@ -116,13 +117,13 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
       'username': 'Guest',
       'profileImage': null,
     });
-    
+
     if (mounted) {
       // Navigate to home as guest
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => 
-            RootView(currentScreen: 0),
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              RootView(currentScreen: 0),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(
               opacity: animation,
@@ -144,14 +145,17 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
     // Responsive dimensions
     final imageHeight = ResponsiveUtils.orientation(
       context: context,
-      portrait: screenHeight * 0.55,
+      portrait: screenHeight * 0.5,
       landscape: screenHeight * 0.7,
     );
 
-    final titleFontSize = ResponsiveUtils.fontSize(context, isLandscape ? 28 : 32);
-    final subtitleFontSize = ResponsiveUtils.fontSize(context, isLandscape ? 14 : 16);
+    final titleFontSize =
+        ResponsiveUtils.fontSize(context, isLandscape ? 28 : 32);
+    final subtitleFontSize =
+        ResponsiveUtils.fontSize(context, isLandscape ? 14 : 16);
     final buttonFontSize = ResponsiveUtils.fontSize(context, 17);
-    final smallTextFontSize = ResponsiveUtils.fontSize(context, isLandscape ? 10 : 11);
+    final smallTextFontSize =
+        ResponsiveUtils.fontSize(context, isLandscape ? 10 : 11);
 
     final horizontalPadding = ResponsiveUtils.spacing(context, 24);
     final verticalPadding = ResponsiveUtils.spacing(context, 24);
@@ -176,8 +180,9 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
             Navigator.of(context).pushReplacement(
               PageRouteBuilder(
                 pageBuilder: (context, animation, secondaryAnimation) =>
-                  RootView(currentScreen: 0),
-                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                    RootView(currentScreen: 0),
+                transitionsBuilder:
+                    (context, animation, secondaryAnimation, child) {
                   return FadeTransition(
                     opacity: animation,
                     child: child,
@@ -292,7 +297,8 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            SizedBox(height: ResponsiveUtils.spacing(context, 20)),
+                            SizedBox(
+                                height: ResponsiveUtils.spacing(context, 20)),
                             Text(
                               'Welcome to FitStart',
                               style: TextStyle(
@@ -304,7 +310,8 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
                                 ],
                               ),
                             ),
-                            SizedBox(height: ResponsiveUtils.spacing(context, 8)),
+                            SizedBox(
+                                height: ResponsiveUtils.spacing(context, 8)),
                             Text(
                               'Your fitness journey begins here',
                               style: TextStyle(
@@ -329,7 +336,7 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
           // Bottom white sheet
           Expanded(
             child: Transform.translate(
-              offset: const Offset(0, -30),
+              offset: const Offset(0, -16),
               child: Container(
                 width: double.infinity,
                 padding: EdgeInsets.symmetric(
@@ -387,12 +394,14 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
                             ),
                           ),
 
-                          SizedBox(height: ResponsiveUtils.spacing(context, 24)),
+                          SizedBox(
+                              height: ResponsiveUtils.spacing(context, 24)),
 
                           // Google Sign In Button
                           _isLoading
                               ? const CircularProgressIndicator(
-                                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF92C848)),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Color(0xFF92C848)),
                                 )
                               : SizedBox(
                                   width: double.infinity,
@@ -402,8 +411,10 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
                                       'assets/icons/google_logo.png',
                                       height: 24,
                                       width: 24,
-                                      errorBuilder: (context, error, stackTrace) =>
-                                        const Icon(Icons.g_mobiledata, size: 24, color: Colors.red),
+                                      errorBuilder:
+                                          (context, error, stackTrace) =>
+                                              const Icon(Icons.g_mobiledata,
+                                                  size: 24, color: Colors.red),
                                     ),
                                     label: const Text(
                                       'Continue with Google',
@@ -420,15 +431,18 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
                                         borderRadius: BorderRadius.circular(30),
                                       ),
                                       padding: EdgeInsets.symmetric(
-                                        vertical: ResponsiveUtils.spacing(context, 16),
+                                        vertical: ResponsiveUtils.spacing(
+                                            context, 16),
                                       ),
-                                      minimumSize: const Size(double.infinity, 56),
+                                      minimumSize:
+                                          const Size(double.infinity, 56),
                                       elevation: 2,
                                     ),
                                   ),
                                 ),
 
-                          SizedBox(height: ResponsiveUtils.spacing(context, 12)),
+                          SizedBox(
+                              height: ResponsiveUtils.spacing(context, 12)),
 
                           // Skip / Guest Mode Button
                           if (!_isLoading)
@@ -437,7 +451,8 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
                               child: Text(
                                 'Skip for now',
                                 style: TextStyle(
-                                  fontSize: ResponsiveUtils.fontSize(context, 15),
+                                  fontSize:
+                                      ResponsiveUtils.fontSize(context, 15),
                                   color: Colors.grey[600],
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -547,7 +562,8 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
                                 ],
                               ),
                             ),
-                            SizedBox(height: ResponsiveUtils.spacing(context, 8)),
+                            SizedBox(
+                                height: ResponsiveUtils.spacing(context, 8)),
                             Text(
                               'Your fitness journey begins here',
                               style: TextStyle(
@@ -624,7 +640,8 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
                       // Google Sign In Button
                       _isLoading
                           ? const CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF92C848)),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                  Color(0xFF92C848)),
                             )
                           : SizedBox(
                               width: double.infinity,
@@ -635,7 +652,8 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
                                   height: 20,
                                   width: 20,
                                   errorBuilder: (context, error, stackTrace) =>
-                                    const Icon(Icons.g_mobiledata, size: 20, color: Colors.red),
+                                      const Icon(Icons.g_mobiledata,
+                                          size: 20, color: Colors.red),
                                 ),
                                 label: const Text(
                                   'Continue with Google',
@@ -652,7 +670,8 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
                                     borderRadius: BorderRadius.circular(25),
                                   ),
                                   padding: EdgeInsets.symmetric(
-                                    vertical: ResponsiveUtils.spacing(context, 14),
+                                    vertical:
+                                        ResponsiveUtils.spacing(context, 14),
                                   ),
                                   minimumSize: const Size(double.infinity, 48),
                                   elevation: 2,

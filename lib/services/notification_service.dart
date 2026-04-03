@@ -9,8 +9,8 @@ import 'package:FitStart/model/notification_item.dart';
 import 'package:FitStart/modules/notification/notification_view.dart';
 import 'package:FitStart/main.dart'; // For navigatorKey
 
-// Backend API URL (Railway production)
-const String apiBaseUrl = 'https://fitstart-backend-production.up.railway.app/api/v1';
+// Backend API URL (Render production)
+const String apiBaseUrl = 'https://fitstart-backend.onrender.com/api/v1';
 
 // Background message handler (must be top-level function)
 @pragma('vm:entry-point')
@@ -22,7 +22,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     print('Body: ${message.notification?.body}');
     print('Data: ${message.data}');
   }
-  
+
   // Save notification to storage
   await NotificationService._saveNotificationToStorage(message);
   if (kDebugMode) {
@@ -32,7 +32,8 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 class NotificationService {
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
-  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
   String? _fcmToken;
   static const String _notificationsKey = 'notifications';
 
@@ -373,7 +374,7 @@ class NotificationService {
       // Get JWT token from Hive
       final Box<dynamic> authBox = await Hive.openBox('fitstart_auth');
       final jwtToken = authBox.get('jwt_token');
-      
+
       if (jwtToken == null) {
         if (kDebugMode) {
           print('⚠️ No JWT token found, cannot send notification');

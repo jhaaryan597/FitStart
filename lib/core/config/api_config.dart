@@ -1,7 +1,8 @@
 // Centralized API Configuration
 // Single source of truth for all API-related settings
 
-import 'package:flutter/foundation.dart' show kDebugMode, debugPrint, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show kDebugMode, debugPrint, defaultTargetPlatform, TargetPlatform;
 
 /// Centralized API configuration for the entire app.
 /// All services should use this instead of defining their own URLs.
@@ -13,8 +14,9 @@ class ApiConfig {
   static const String _baseUrlAndroidEmulator = 'http://10.0.2.2:3000/api/v1';
   static const String _baseUrlAndroidDevice = 'http://10.50.84.235:3000/api/v1';
 
-  // Production URL (Railway)
-  static const String _baseUrlProd = 'https://fitstart-backend-production.up.railway.app/api/v1';
+  // Production URL (Render)
+  static const String _baseUrlProd =
+      'https://fitstart-backend.onrender.com/api/v1';
 
   /// API version for route prefixing
   static const String apiVersion = 'v1';
@@ -26,7 +28,7 @@ class ApiConfig {
   static const Duration connectionTimeout = Duration(seconds: 15);
 
   /// Whether to use production URL
-  static bool get isProduction => 
+  static bool get isProduction =>
       _baseUrlProd != 'https://your-railway-app.up.railway.app/api/v1';
 
   /// Get the appropriate base URL based on environment and platform
@@ -42,7 +44,7 @@ class ApiConfig {
       // Real devices need the host machine's IP address
       return _baseUrlAndroidDevice;
     }
-    
+
     // iOS simulator and web use localhost
     return _baseUrlDev;
   }
@@ -97,7 +99,8 @@ class AppLogger {
   }
 
   /// Log network request (only in debug mode)
-  static void network(String method, String url, {int? statusCode, String? body}) {
+  static void network(String method, String url,
+      {int? statusCode, String? body}) {
     if (kDebugMode) {
       debugPrint('🌐 $method $url');
       if (statusCode != null) {
