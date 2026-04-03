@@ -3,9 +3,31 @@ const mongoose = require('mongoose');
 const MAX_RETRIES = 5;
 const RETRY_DELAY_MS = 5000;
 
+const getMongoUri = () => {
+  const uri =
+    process.env.MONGODB_URI ||
+    process.env.MONGO_URI ||
+    process.env.DATABASE_URL ||
+    process.env.MONGO_URL;
+
+  if (typeof uri !== 'string' || !uri.trim()) {
+    return null;
+  }
+
+  return uri.trim();
+};
+
 const connectDB = async (retryCount = 0) => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI, {
+    const mongoUri = getMongoUri();
+
+    if (!mongoUri) {
+      throw new Error(
+        'MongoDB URI is missing. Set one of: MONGODB_URI, MONGO_URI, DATABASE_URL, or MONGO_URL'
+      );
+    }
+
+    const conn = await mongoose.connect(mongoUri, {
       // Modern mongoose options
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
