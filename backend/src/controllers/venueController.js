@@ -1,6 +1,5 @@
 const Venue = require('../models/Venue');
 const User = require('../models/User');
-const MLInteraction = require('../models/MLInteraction');
 
 // @desc    Get all venues
 // @route   GET /api/v1/venues
@@ -111,15 +110,6 @@ exports.getVenue = async (req, res, next) => {
       return res.status(404).json({
         success: false,
         message: 'Venue not found',
-      });
-    }
-
-    // Track view interaction if user is logged in
-    if (req.user) {
-      await MLInteraction.create({
-        user: req.user.id,
-        venue: venue._id,
-        interactionType: 'view',
       });
     }
 
@@ -257,13 +247,6 @@ exports.toggleFavorite = async (req, res, next) => {
       user.favorites.splice(favoriteIndex, 1);
       await user.save();
 
-      // Track unfavorite interaction
-      await MLInteraction.create({
-        user: user._id,
-        venue: venue._id,
-        interactionType: 'unfavorite',
-      });
-
       res.status(200).json({
         success: true,
         message: 'Removed from favorites',
@@ -273,13 +256,6 @@ exports.toggleFavorite = async (req, res, next) => {
       // Add to favorites
       user.favorites.push(venue._id);
       await user.save();
-
-      // Track favorite interaction
-      await MLInteraction.create({
-        user: user._id,
-        venue: venue._id,
-        interactionType: 'favorite',
-      });
 
       res.status(200).json({
         success: true,
