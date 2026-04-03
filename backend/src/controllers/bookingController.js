@@ -1,7 +1,7 @@
 const Booking = require('../models/Booking');
 const Venue = require('../models/Venue');
 const Notification = require('../models/Notification');
-const MLInteraction = require('../models/MLInteraction');
+const User = require('../models/User');
 const { sendNotification } = require('../config/firebase');
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
@@ -150,13 +150,6 @@ exports.createBooking = async (req, res, next) => {
         razorpayOrderId: razorpayOrder.id,
       },
       notes,
-    });
-
-    // Track booking interaction
-    await MLInteraction.create({
-      user: req.user.id,
-      venue: venueId,
-      interactionType: 'booking',
     });
 
     res.status(201).json({
