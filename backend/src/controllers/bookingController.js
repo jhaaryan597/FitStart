@@ -28,7 +28,10 @@ exports.getBookings = async (req, res, next) => {
     let query = { user: req.user.id };
 
     if (status) {
-      query.bookingStatus = status;
+      const normalizedStatus = String(status).toLowerCase() === 'cancelled'
+        ? 'cancelled'
+        : status;
+      query.bookingStatus = normalizedStatus;
     }
 
     if (startDate || endDate) {
@@ -99,6 +102,35 @@ exports.getBooking = async (req, res, next) => {
 exports.createBooking = async (req, res, next) => {
   try {
     const { venueId, bookingDate, timeSlots, notes } = req.body;
+
+    if (!razorpay) {
+      return res.status(503).json({
+        success: false,
+        message: 'Payments are temporarily unavailable',
+      });
+    }
+
+    if (!Array.isArray(timeSlots) || timeSlots.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one time slot is required',
+      });
+    }
+
+    const hasInvalidSlot = timeSlots.some(
+      (slot) =>
+        !slot?.startTime ||
+        !slot?.endTime ||
+        parseInt(String(slot.startTime).split(':')[0], 10) >=
+          parseInt(String(slot.endTime).split(':')[0], 10)
+    );
+
+    if (hasInvalidSlot) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid time slot(s) provided',
+      });
+    }
 
     // Check if venue exists
     const venue = await Venue.findById(venueId);
@@ -179,6 +211,21 @@ exports.verifyPayment = async (req, res, next) => {
       });
     }
 
+    if (booking.payment?.status === 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment already verified for this booking',
+      });
+    }
+
+    // Check ownership before accepting payment verification
+    if (booking.user.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to verify payment for this booking',
+      });
+    }
+
     // Verify signature
     const text = booking.payment.razorpayOrderId + '|' + razorpayPaymentId;
     const expectedSignature = crypto
@@ -207,16 +254,21 @@ exports.verifyPayment = async (req, res, next) => {
 
     // Send confirmation notification
     const user = await User.findById(booking.user);
-    if (user.fcmTokens.length > 0) {
+    if (user?.fcmTokens?.length > 0) {
       const fcmToken = user.fcmTokens[0].token;
-      await sendNotification(fcmToken, {
-        title: 'Booking Confirmed!',
-        body: `Your booking at ${booking.venue.name} has been confirmed.`,
-        data: {
-          type: 'booking',
-          bookingId: booking._id.toString(),
-        },
-      });
+
+      try {
+        await sendNotification(fcmToken, {
+          title: 'Booking Confirmed!',
+          body: `Your booking at ${booking.venue.name} has been confirmed.`,
+          data: {
+            type: 'booking',
+            bookingId: booking._id.toString(),
+          },
+        });
+      } catch (notificationError) {
+        console.warn('Failed to send booking confirmation push:', notificationError.message);
+      }
 
       // Save notification to database
       await Notification.create({
@@ -266,7 +318,10 @@ exports.cancelBooking = async (req, res, next) => {
     }
 
     // Check if already Cancelled
-    if (booking.bookingStatus === 'Cancelled') {
+    if (
+      booking.bookingStatus === 'Cancelled' ||
+      booking.bookingStatus === 'cancelled'
+    ) {
       return res.status(400).json({
         success: false,
         message: 'Booking is already Cancelled',
@@ -282,23 +337,29 @@ exports.cancelBooking = async (req, res, next) => {
       });
     }
 
-    booking.bookingStatus = 'Cancelled';
+    booking.bookingStatus = 'cancelled';
     booking.cancellationReason = reason;
-    booking.CancelledAt = Date.now();
+    booking.cancelledAt = Date.now();
+    booking.CancelledAt = booking.cancelledAt;
     await booking.save();
 
     // Send cancellation notification
     const user = await User.findById(booking.user);
-    if (user.fcmTokens.length > 0) {
+    if (user?.fcmTokens?.length > 0) {
       const fcmToken = user.fcmTokens[0].token;
-      await sendNotification(fcmToken, {
-        title: 'Booking Cancelled',
-        body: `Your booking at ${booking.venue.name} has been Cancelled.`,
-        data: {
-          type: 'booking',
-          bookingId: booking._id.toString(),
-        },
-      });
+
+      try {
+        await sendNotification(fcmToken, {
+          title: 'Booking Cancelled',
+          body: `Your booking at ${booking.venue.name} has been Cancelled.`,
+          data: {
+            type: 'booking',
+            bookingId: booking._id.toString(),
+          },
+        });
+      } catch (notificationError) {
+        console.warn('Failed to send booking cancellation push:', notificationError.message);
+      }
 
       await Notification.create({
         user: booking.user,

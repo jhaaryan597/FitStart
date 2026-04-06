@@ -18,6 +18,10 @@ const bookingRoutes = require('./routes/bookingRoutes');
 // Initialize express app
 const app = express();
 
+if (!process.env.JWT_SECRET || !String(process.env.JWT_SECRET).trim()) {
+  throw new Error('JWT_SECRET is missing. Please set JWT_SECRET in backend .env');
+}
+
 // Connect to MongoDB
 connectDB();
 
@@ -27,9 +31,12 @@ initializeFirebase();
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+const configuredFrontendOrigin = process.env.FRONTEND_URL;
 app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
-  credentials: true,
+  origin: configuredFrontendOrigin && configuredFrontendOrigin !== '*'
+    ? configuredFrontendOrigin
+    : '*',
+  credentials: Boolean(configuredFrontendOrigin && configuredFrontendOrigin !== '*'),
 }));
 app.use(helmet());
 app.use(compression());

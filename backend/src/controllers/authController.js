@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
+const fs = require('fs/promises');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -375,15 +376,18 @@ exports.deleteAccount = async (req, res, next) => {
 // @route   POST /api/v1/auth/upload-profile-image
 // @access  Private
 exports.uploadProfileImage = async (req, res, next) => {
+  let uploadedTempPath;
+
   try {
-    if (!req.files || !req.files.image) {
+    if (!req.file) {
       return res.status(400).json({
         success: false,
         message: 'Please upload an image file',
       });
     }
 
-    const file = req.files.image;
+    const file = req.file;
+    uploadedTempPath = file.path;
 
     // Check file type
     if (!file.mimetype.startsWith('image/')) {
@@ -423,7 +427,7 @@ exports.uploadProfileImage = async (req, res, next) => {
     }
 
     // Upload new image
-    const result = await uploadImage(file.tempFilePath, 'fitstart/profiles');
+    const result = await uploadImage(uploadedTempPath, 'fitstart/profiles');
 
     // Update user profile
     user.profileImage = result.url;
@@ -438,5 +442,13 @@ exports.uploadProfileImage = async (req, res, next) => {
   } catch (error) {
     console.error('Profile image upload error:', error);
     next(error);
+  } finally {
+    if (uploadedTempPath) {
+      try {
+        await fs.unlink(uploadedTempPath);
+      } catch (cleanupError) {
+        // Ignore temp file cleanup errors
+      }
+    }
   }
 };
