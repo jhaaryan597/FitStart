@@ -592,122 +592,147 @@ class _GoogleAuthViewState extends State<GoogleAuthView>
               opacity: _fadeAnimation,
               child: SlideTransition(
                 position: _slideAnimation,
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: horizontalPadding,
-                    vertical: verticalPadding,
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Logo
-                      Image.asset(
-                        'assets/images/logo.png',
-                        height: ResponsiveUtils.responsive(
-                          context: context,
-                          mobile: 60,
-                          tablet: 75,
-                          desktop: 90,
+                child: SafeArea(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: horizontalPadding,
+                          vertical: verticalPadding,
                         ),
-                      ),
-                      SizedBox(height: ResponsiveUtils.spacing(context, 16)),
-
-                      // Title
-                      Text(
-                        'Get Started',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: ResponsiveUtils.fontSize(context, 22),
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      SizedBox(height: ResponsiveUtils.spacing(context, 8)),
-
-                      // Subtitle
-                      Text(
-                        'Sign in with your Google account to access gyms, fitness classes, and more',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: ResponsiveUtils.fontSize(context, 13),
-                          color: Colors.grey[600],
-                          height: 1.4,
-                        ),
-                      ),
-
-                      SizedBox(height: ResponsiveUtils.spacing(context, 24)),
-
-                      // Google Sign In Button
-                      _isLoading
-                          ? const CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                  Color(0xFF92C848)),
-                            )
-                          : SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: _handleGoogleSignIn,
-                                icon: Image.asset(
-                                  'assets/icons/google_logo.png',
-                                  height: 20,
-                                  width: 20,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      const Icon(Icons.g_mobiledata,
-                                          size: 20, color: Colors.red),
-                                ),
-                                label: const Text(
-                                  'Continue with Google',
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF92C848),
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(25),
-                                  ),
-                                  padding: EdgeInsets.symmetric(
-                                    vertical:
-                                        ResponsiveUtils.spacing(context, 14),
-                                  ),
-                                  minimumSize: const Size(double.infinity, 48),
-                                  elevation: 2,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight -
+                                (verticalPadding * 2),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              // Logo
+                              Image.asset(
+                                'assets/images/logo.png',
+                                height: ResponsiveUtils.responsive(
+                                  context: context,
+                                  mobile: 60,
+                                  tablet: 75,
+                                  desktop: 90,
                                 ),
                               ),
-                            ),
+                              SizedBox(
+                                  height: ResponsiveUtils.spacing(context, 16)),
 
-                      SizedBox(height: ResponsiveUtils.spacing(context, 12)),
+                              // Title
+                              Text(
+                                'Get Started',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: ResponsiveUtils.fontSize(context, 22),
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              SizedBox(
+                                  height: ResponsiveUtils.spacing(context, 8)),
 
-                      // Skip / Guest Mode Button
-                      if (!_isLoading)
-                        TextButton(
-                          onPressed: _handleGuestMode,
-                          child: Text(
-                            'Skip for now',
-                            style: TextStyle(
-                              fontSize: ResponsiveUtils.fontSize(context, 14),
-                              color: Colors.grey[600],
-                              fontWeight: FontWeight.w500,
-                            ),
+                              // Subtitle
+                              Text(
+                                'Sign in with your Google account to access gyms, fitness classes, and more',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: ResponsiveUtils.fontSize(context, 13),
+                                  color: Colors.grey[600],
+                                  height: 1.4,
+                                ),
+                              ),
+
+                              SizedBox(
+                                  height: ResponsiveUtils.spacing(context, 24)),
+
+                              // Google Sign In Button
+                              _isLoading
+                                  ? const CircularProgressIndicator(
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          Color(0xFF92C848)),
+                                    )
+                                  : SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton.icon(
+                                        onPressed: _handleGoogleSignIn,
+                                        icon: Image.asset(
+                                          'assets/icons/google_logo.png',
+                                          height: 20,
+                                          width: 20,
+                                          errorBuilder:
+                                              (context, error, stackTrace) =>
+                                                  const Icon(
+                                            Icons.g_mobiledata,
+                                            size: 20,
+                                            color: Colors.red,
+                                          ),
+                                        ),
+                                        label: const Text(
+                                          'Continue with Google',
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              const Color(0xFF92C848),
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(25),
+                                          ),
+                                          padding: EdgeInsets.symmetric(
+                                            vertical: ResponsiveUtils.spacing(
+                                                context, 14),
+                                          ),
+                                          minimumSize:
+                                              const Size(double.infinity, 48),
+                                          elevation: 2,
+                                        ),
+                                      ),
+                                    ),
+
+                              SizedBox(
+                                  height: ResponsiveUtils.spacing(context, 12)),
+
+                              // Skip / Guest Mode Button
+                              if (!_isLoading)
+                                TextButton(
+                                  onPressed: _handleGuestMode,
+                                  child: Text(
+                                    'Skip for now',
+                                    style: TextStyle(
+                                      fontSize:
+                                          ResponsiveUtils.fontSize(context, 14),
+                                      color: Colors.grey[600],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+
+                              SizedBox(
+                                  height: ResponsiveUtils.spacing(context, 8)),
+
+                              // Terms text
+                              Text(
+                                'By continuing, you agree to our\nTerms of Service and Privacy Policy',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: smallTextFontSize,
+                                  color: Colors.grey[500],
+                                  height: 1.4,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-
-                      SizedBox(height: ResponsiveUtils.spacing(context, 8)),
-
-                      // Terms text
-                      Text(
-                        'By continuing, you agree to our\nTerms of Service and Privacy Policy',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: smallTextFontSize,
-                          color: Colors.grey[500],
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
                 ),
               ),

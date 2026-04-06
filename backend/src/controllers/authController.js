@@ -4,11 +4,46 @@ const { OAuth2Client } = require('google-auth-library');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+const getJwtExpiry = () => {
+  const rawExpire = process.env.JWT_EXPIRE;
+
+  if (rawExpire === undefined || rawExpire === null) {
+    return '7d';
+  }
+
+  if (typeof rawExpire === 'number') {
+    return rawExpire;
+  }
+
+  const normalizedExpire = String(rawExpire).trim();
+
+  if (!normalizedExpire) {
+    return '7d';
+  }
+
+  // If passed as numeric string, convert to seconds
+  if (/^\d+$/.test(normalizedExpire)) {
+    return Number(normalizedExpire);
+  }
+
+  return normalizedExpire;
+};
+
 // Generate JWT Token
 const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE,
-  });
+  try {
+    return jwt.sign({ id }, process.env.JWT_SECRET, {
+      expiresIn: getJwtExpiry(),
+    });
+  } catch (error) {
+    console.warn(
+      `Invalid JWT_EXPIRE value "${process.env.JWT_EXPIRE}". Falling back to 7d.`
+    );
+
+    return jwt.sign({ id }, process.env.JWT_SECRET, {
+      expiresIn: '7d',
+    });
+  }
 };
 
 // @desc    Google Sign In

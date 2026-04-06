@@ -28,21 +28,7 @@ class _ProfileViewState extends State<ProfileView> {
   @override
   void initState() {
     super.initState();
-    _checkGuestMode();
     _loadProfile();
-  }
-
-  Future<void> _checkGuestMode() async {
-    final isGuest = await GuestModeService.isGuestMode();
-    if (isGuest && mounted) {
-      final canProceed = await GuestModeService.showLoginRequiredDialog(
-        context,
-        feature: 'profile access',
-      );
-      if (!canProceed && mounted) {
-        Navigator.pop(context);
-      }
-    }
   }
 
   /// Get current user ID from cache
@@ -68,6 +54,20 @@ class _ProfileViewState extends State<ProfileView> {
   }
 
   Future<void> _loadProfile() async {
+    final isGuest = await GuestModeService.isGuestMode();
+    if (isGuest) {
+      final userBox = await Hive.openBox('user_cache');
+      if (mounted) {
+        setState(() {
+          _username = (userBox.get('name') as String?) ?? 'Guest User';
+          _email = (userBox.get('email') as String?) ?? 'guest@fitstart.local';
+          _userId = (userBox.get('id') as String?) ?? 'guest_user';
+          _profileImageUrl = null;
+        });
+      }
+      return;
+    }
+
     // Try to load from cache first (valid for 5 minutes)
     final cachedProfile = await CacheManager.get<Map<String, dynamic>>(
       'user_profile',
