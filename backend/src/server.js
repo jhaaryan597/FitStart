@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const cron = require('node-cron');
 
 const connectDB = require('./config/database');
 const { initializeFirebase } = require('./config/firebase');
@@ -63,8 +64,14 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API Routes
 const API_VERSION = process.env.API_VERSION || 'v1';
+
+// Versioned health endpoint for uptime/self-ping checks
+app.get(`/api/${API_VERSION}/health`, (req, res) => {
+  res.status(200).send('OK');
+});
+
+// API Routes
 app.use(`/api/${API_VERSION}/auth`, authRoutes);
 app.use(`/api/${API_VERSION}/venues`, venueRoutes);
 app.use(`/api/${API_VERSION}/bookings`, bookingRoutes);
@@ -94,6 +101,24 @@ const server = app.listen(PORT, HOST, () => {
 ║  API Version: ${API_VERSION}
 ╚══════════════════════════════════════════╝
   `);
+
+  const renderExternalUrl = process.env.RENDER_EXTERNAL_URL;
+  const backendUrl = process.env.BACKEND_URL;
+  const selfPingTarget =
+    (renderExternalUrl && `${renderExternalUrl.replace(/\/$/, '')}/api/${API_VERSION}/health`) ||
+    (backendUrl && `${backendUrl.replace(/\/$/, '')}/api/${API_VERSION}/health`) ||
+    `http://127.0.0.1:${PORT}/api/${API_VERSION}/health`;
+
+  // Keep-alive self-ping every 5 minutes; fire-and-forget to avoid blocking the event loop.
+  cron.schedule('*/5 * * * *', () => {
+    void fetch(selfPingTarget, {
+      method: 'GET',
+      headers: { 'User-Agent': 'fitstart-self-ping' },
+      keepalive: true,
+    }).catch(() => {
+      // Silent by design: failures should not affect app behavior.
+    });
+  });
 });
 
 // Handle unhandled promise rejections

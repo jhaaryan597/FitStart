@@ -104,7 +104,7 @@ class PrivacyPolicyView extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Last updated: October 2025',
+                      'Last updated: April 2026',
                       style: descTextStyle.copyWith(
                         color: neutral700,
                         fontWeight: FontWeight.w500,

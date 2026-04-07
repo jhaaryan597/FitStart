@@ -193,8 +193,8 @@ class LegalInformationView extends StatelessWidget {
                   const SizedBox(height: 12),
                   Text(
                     'Version: 1.0\n'
-                    'Last Updated: October 2025\n'
-                    'Effective Date: October 2025\n\n'
+                    'Last Updated: April 2026\n'
+                    'Effective Date: April 2026\n\n'
                     'These terms constitute the entire agreement between you and FitStart.',
                     style: descTextStyle.copyWith(
                       color: neutral700,
