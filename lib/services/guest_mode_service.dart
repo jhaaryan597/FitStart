@@ -37,10 +37,10 @@ class GuestModeService {
     try {
       final userBox = await Hive.openBox(_userCacheBox);
       final email = userBox.get('email') as String?;
-      return email == null || 
-             email.isEmpty || 
-             email == 'guest@fitstart.local' ||
-             email.contains('guest');
+      return email == null ||
+          email.isEmpty ||
+          email == 'guest@fitstart.local' ||
+          email.contains('guest');
     } catch (e) {
       return true;
     }
@@ -51,12 +51,23 @@ class GuestModeService {
     try {
       final box = await Hive.openBox(_settingsBox);
       await box.put(_guestModeKey, false);
-      
+
       // Clear guest user data
       final userBox = await Hive.openBox(_userCacheBox);
       await userBox.delete('email');
       await userBox.delete('name');
       await userBox.delete('id');
+    } catch (e) {
+      // Ignore errors
+    }
+  }
+
+  /// Disable guest mode without clearing user data.
+  /// Use this after a successful authenticated sign-in to preserve fresh profile/token cache.
+  static Future<void> disableGuestModeOnly() async {
+    try {
+      final box = await Hive.openBox(_settingsBox);
+      await box.put(_guestModeKey, false);
     } catch (e) {
       // Ignore errors
     }

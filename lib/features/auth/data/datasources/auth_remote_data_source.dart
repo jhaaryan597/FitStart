@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/config/api_config.dart';
+import '../../../../core/cache/cache_manager.dart';
 import '../../../../services/google_auth_service.dart';
 import '../models/user_model.dart';
 
@@ -42,6 +43,23 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
     };
+  }
+
+  Future<void> _clearLocalAuthState() async {
+    final authBox = await Hive.openBox('fitstart_auth');
+    await authBox.delete('jwt_token');
+    await authBox.delete('user_data');
+    await authBox.delete('last_login');
+
+    final userBox = await Hive.openBox('user_cache');
+    await userBox.delete('id');
+    await userBox.delete('email');
+    await userBox.delete('name');
+
+    final settingsBox = await Hive.openBox('settings');
+    await settingsBox.delete('guest_mode');
+
+    await CacheManager.delete('user_profile');
   }
 
   // Save user data to Hive for offline access
@@ -148,7 +166,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         }),
       );
 
-      AppLogger.network('Response', '$baseUrl/auth/google', statusCode: response.statusCode, body: response.body);
+      AppLogger.network('Response', '$baseUrl/auth/google',
+          statusCode: response.statusCode, body: response.body);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final responseData = jsonDecode(response.body);
@@ -195,18 +214,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         );
       }
     } finally {
-      // Always remove token locally and disconnect from Google
-      final authBox = await Hive.openBox('fitstart_auth');
-      await authBox.delete('jwt_token');
-      await authBox.delete('user_data');
-      await authBox.delete('last_login');
-
-      // Reset onboarding and guest mode flags so user sees onboarding again
-      final settingsBox = await Hive.openBox('settings');
-      await settingsBox.delete('onboarding_complete');
-      await settingsBox.delete('guest_mode');
-
-      // Sign out from Google to clear cached account
+      // Always clear local app session and Google session.
+      await _clearLocalAuthState();
       await GoogleAuthService.signOut();
     }
   }

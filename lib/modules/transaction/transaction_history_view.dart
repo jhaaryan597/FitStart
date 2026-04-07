@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:FitStart/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:FitStart/features/auth/presentation/bloc/auth_event.dart';
 import 'package:FitStart/features/auth/presentation/bloc/auth_state.dart';
+import 'package:FitStart/core/cache/cache_manager.dart';
+import 'package:FitStart/modules/root/root_view.dart';
 import 'package:FitStart/modules/transaction/tab_history_view.dart';
 import 'package:FitStart/modules/transaction/tab_order_view.dart';
 import 'package:FitStart/services/guest_mode_service.dart';
@@ -97,13 +99,29 @@ class _TransactionHistoryViewState extends State<TransactionHistoryView>
         if (!_isSigningIn) return;
 
         if (state is Authenticated || state is AuthSuccess) {
-          await GuestModeService.exitGuestMode();
+          final user =
+              state is Authenticated ? state.user : (state as AuthSuccess).user;
+
+          await GuestModeService.disableGuestModeOnly();
+          await CacheManager.set('user_profile', {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'profileImage': user.profileImage,
+            'phoneNumber': user.phoneNumber,
+          });
+
           if (!mounted) return;
 
           setState(() {
             _isGuestMode = false;
             _isSigningIn = false;
           });
+
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => RootView(currentScreen: 0)),
+            (route) => false,
+          );
         } else if (state is AuthError) {
           if (!mounted) return;
 

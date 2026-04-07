@@ -5,8 +5,9 @@ import 'dart:developer' as developer;
 class GoogleAuthService {
   // Add your Web Client ID from Google Cloud Console here
   // This is required for backend token verification
-  static const String _webClientId = '112923590570-9mtmf3mj0jj0nitt3n2v1hcian1jb458.apps.googleusercontent.com';
-  
+  static const String _webClientId =
+      '112923590570-9mtmf3mj0jj0nitt3n2v1hcian1jb458.apps.googleusercontent.com';
+
   static final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
     // Important: Add server client ID for backend verification
@@ -14,20 +15,21 @@ class GoogleAuthService {
   );
 
   /// Sign in with Google and return the ID token
-  static Future<Map<String, dynamic>> signInWithGoogle({bool forceAccountPicker = true}) async {
+  static Future<Map<String, dynamic>> signInWithGoogle(
+      {bool forceAccountPicker = true}) async {
     try {
       developer.log('Starting Google Sign-In...');
-      
+
       // Sign out first to force account picker
       if (forceAccountPicker) {
         await _googleSignIn.signOut();
       }
-      
+
       // Trigger the authentication flow
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      
+
       developer.log('Google Sign-In completed. User: ${googleUser?.email}');
-      
+
       if (googleUser == null) {
         // User canceled the sign-in
         developer.log('Google Sign-In Cancelled by user');
@@ -38,7 +40,8 @@ class GoogleAuthService {
       }
 
       // Obtain the auth details from the request
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
 
       // Get the ID token
       final String? idToken = googleAuth.idToken;
@@ -58,17 +61,19 @@ class GoogleAuthService {
         'photoUrl': googleUser.photoUrl,
       };
     } on PlatformException catch (e) {
-      developer.log('PlatformException during Google Sign-In: ${e.code} - ${e.message}');
+      developer.log(
+          'PlatformException during Google Sign-In: ${e.code} - ${e.message}');
       String errorMessage = 'Failed to sign in with Google';
-      
+
       if (e.code == 'sign_in_failed') {
-        errorMessage = 'Sign in failed. Please check your Google Cloud Console configuration.';
+        errorMessage =
+            'Sign in failed. Please check your Google Cloud Console configuration.';
       } else if (e.code == 'network_error') {
         errorMessage = 'Network error. Please check your internet connection.';
       } else if (e.code == 'sign_in_canceled') {
         errorMessage = 'Sign in Cancelled';
       }
-      
+
       return {
         'success': false,
         'error': '$errorMessage (Code: ${e.code})',
@@ -85,10 +90,23 @@ class GoogleAuthService {
   /// Sign out from Google
   static Future<void> signOut() async {
     try {
-      await _googleSignIn.disconnect();
-      await _googleSignIn.signOut();
+      final signedIn = await _googleSignIn.isSignedIn();
+
+      // Sign out should always be safe to call, even with no active Google session.
+      if (signedIn) {
+        await _googleSignIn.signOut();
+
+        // Revoke access as best effort; ignore failures to avoid breaking app logout.
+        try {
+          await _googleSignIn.disconnect();
+        } on PlatformException catch (e) {
+          developer.log(
+            'Google disconnect skipped: ${e.code} - ${e.message}',
+          );
+        }
+      }
     } catch (error) {
-      print('Error signing out: $error');
+      developer.log('Error signing out from Google: $error');
     }
   }
 
@@ -96,14 +114,16 @@ class GoogleAuthService {
   /// Returns null if no cached authentication exists
   static Future<Map<String, dynamic>?> signInSilently() async {
     try {
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signInSilently();
-      
+      final GoogleSignInAccount? googleUser =
+          await _googleSignIn.signInSilently();
+
       if (googleUser == null) {
         return null;
       }
 
       // Obtain the auth details from the request
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
 
       // Get the ID token
       final String? idToken = googleAuth.idToken;
