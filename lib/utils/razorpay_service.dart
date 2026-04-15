@@ -46,7 +46,8 @@ class RazorpayService {
   /// - prefillEmail: Pre-filled email
   void openCheckout({
     required int amount,
-    String? orderId,
+    required String razorpayKey,
+    required String orderId,
     required String name,
     required String description,
     String prefillContact = '9999999999',
@@ -55,27 +56,22 @@ class RazorpayService {
     debugPrint('=== Razorpay Checkout ===');
     debugPrint('Amount: $amount paisa (₹${amount / 100})');
     debugPrint('Name: $name');
-    debugPrint('Description: $description');
+    debugPrint('Order ID: $orderId');
 
-    var options = {
-      // Test API Key - Replace with your actual key from Razorpay Dashboard
-      'key': 'rzp_test_1DP5mmOlF5G5ag',
-      'amount': amount, // Amount in paisa
+    final options = {
+      'key': razorpayKey,
+      'amount': amount,
       'name': 'FitStart',
       'description': description,
+      'order_id': orderId,
       'prefill': {
         'contact': prefillContact,
         'email': prefillEmail,
       },
       'theme': {
-        'color': '#C1FF72', // Your neonGreen color
+        'color': '#C1FF72',
       },
     };
-
-    // Add order_id if provided
-    if (orderId != null && orderId.isNotEmpty) {
-      options['order_id'] = orderId;
-    }
 
     try {
       debugPrint('Opening Razorpay checkout...');

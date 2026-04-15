@@ -214,8 +214,6 @@ class _GymMembershipViewState extends State<GymMembershipView> {
   }
 
   void _showPaymentOptionsDialog() {
-    final planName = _plans[_selectedPlan]!['label'];
-
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -231,19 +229,11 @@ class _GymMembershipViewState extends State<GymMembershipView> {
               InkWell(
                 onTap: () {
                   Navigator.pop(context);
-
-                  String description =
-                      "$planName membership for ${widget.gym.name}";
-                  if (_withTrainer) {
-                    description += " with Personal Trainer";
-                  }
-
-                  _razorpayService.openCheckout(
-                    amount: _totalBill * 100, // Convert to paisa
-                    name: widget.gym.name,
-                    description: description,
-                    prefillContact: '9999999999',
-                    prefillEmail: 'test@example.com',
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Online payment for gym memberships coming soon. Use Pay at Gym for now.'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
                   );
                 },
                 child: Container(

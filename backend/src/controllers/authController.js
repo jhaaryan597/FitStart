@@ -224,6 +224,10 @@ exports.getMe = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id);
 
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
     res.status(200).json({
       success: true,
       data: user,
@@ -249,6 +253,10 @@ exports.updateDetails = async (req, res, next) => {
       new: true,
       runValidators: true,
     });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
 
     res.status(200).json({
       success: true,
@@ -314,6 +322,12 @@ exports.registerFCMToken = async (req, res, next) => {
         token,
         platform: platform || 'android',
       });
+
+      // Keep only the 10 most recent tokens to prevent unbounded accumulation
+      if (user.fcmTokens.length > 10) {
+        user.fcmTokens = user.fcmTokens.slice(-10);
+      }
+
       await user.save();
     }
 
@@ -419,10 +433,16 @@ exports.uploadProfileImage = async (req, res, next) => {
 
     // Delete old profile image if exists
     if (user.profileImage && user.profileImage.includes('cloudinary')) {
-      // Extract public ID from Cloudinary URL
-      const publicId = user.profileImage.split('/').pop().split('.')[0];
-      if (publicId) {
-        await deleteImage(`fitstart/profiles/${publicId}`);
+      try {
+        // Cloudinary URLs look like: .../upload/v123456/fitstart/profiles/filename.jpg
+        // Extract everything after /upload/vXXXXXX/ and strip the file extension
+        const match = user.profileImage.match(/\/upload\/(?:v\d+\/)?(.+?)(?:\.[^.]+)?$/);
+        if (match && match[1]) {
+          await deleteImage(match[1]);
+        }
+      } catch (deleteError) {
+        // Log but don't block the upload if old image cleanup fails
+        console.warn('Failed to delete old profile image:', deleteError.message);
       }
     }
 

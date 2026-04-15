@@ -52,13 +52,19 @@ const googleSignInValidation = [
   validate,
 ];
 
+const updatePasswordValidation = [
+  body('currentPassword').notEmpty().withMessage('Current password is required'),
+  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
+  validate,
+];
+
 // Routes
 router.post('/google', googleSignInValidation, googleSignIn);
 router.post('/register', registerValidation, register);
 router.post('/login', loginValidation, login);
 router.get('/me', protect, getMe);
 router.put('/update', protect, updateDetails);
-router.put('/updatepassword', protect, updatePassword);
+router.put('/updatepassword', protect, updatePasswordValidation, updatePassword);
 router.post('/upload-profile-image', protect, upload.single('image'), uploadProfileImage);
 router.post('/fcm-token', protect, registerFCMToken);
 router.delete('/fcm-token', protect, removeFCMToken);

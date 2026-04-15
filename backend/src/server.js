@@ -15,6 +15,7 @@ const errorHandler = require('./middleware/error');
 const authRoutes = require('./routes/authRoutes');
 const venueRoutes = require('./routes/venueRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
+const reviewRoutes = require('./routes/reviewRoutes');
 
 // Initialize express app
 const app = express();
@@ -75,6 +76,7 @@ app.get(`/api/${API_VERSION}/health`, (req, res) => {
 app.use(`/api/${API_VERSION}/auth`, authRoutes);
 app.use(`/api/${API_VERSION}/venues`, venueRoutes);
 app.use(`/api/${API_VERSION}/bookings`, bookingRoutes);
+app.use(`/api/${API_VERSION}/reviews`, reviewRoutes);
 
 // 404 handler
 app.use((req, res, next) => {

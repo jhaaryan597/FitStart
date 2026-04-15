@@ -8,9 +8,7 @@ import 'package:hive/hive.dart';
 import 'package:FitStart/model/notification_item.dart';
 import 'package:FitStart/modules/notification/notification_view.dart';
 import 'package:FitStart/main.dart'; // For navigatorKey
-
-// Backend API URL (Render production)
-const String apiBaseUrl = 'https://fitstart-backend.onrender.com/api/v1';
+import 'package:FitStart/core/config/api_config.dart';
 
 // Background message handler (must be top-level function)
 @pragma('vm:entry-point')
@@ -291,12 +289,12 @@ class NotificationService {
       }
 
       final response = await http.post(
-        Uri.parse('$apiBaseUrl/auth/fcm-token'),
+        Uri.parse('${ApiConfig.baseUrl}/auth/fcm-token'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $jwtToken',
         },
-        body: jsonEncode({'fcmToken': _fcmToken}),
+        body: jsonEncode({'token': _fcmToken, 'platform': 'android'}),
       );
 
       if (response.statusCode == 200) {
@@ -383,7 +381,7 @@ class NotificationService {
       }
 
       final response = await http.post(
-        Uri.parse('$apiBaseUrl/notifications/send-all'),
+        Uri.parse('${ApiConfig.baseUrl}/notifications/send-all'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $jwtToken',
@@ -435,7 +433,7 @@ class NotificationService {
       }
 
       final response = await http.post(
-        Uri.parse('$apiBaseUrl/notifications/send-specific'),
+        Uri.parse('${ApiConfig.baseUrl}/notifications/send-specific'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $jwtToken',

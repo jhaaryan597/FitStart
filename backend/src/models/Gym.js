@@ -90,6 +90,10 @@ const gymSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
     memberCount: {
       type: Number,
       default: 0,

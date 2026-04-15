@@ -251,17 +251,17 @@ class LocalBookingService {
 
     // Also try to sync with backend
     try {
+      final slots = timeSlots.map((t) {
+        final parts = t.split(' - ');
+        return {
+          'startTime': parts[0].trim(),
+          'endTime': parts.length > 1 ? parts[1].trim() : parts[0].trim(),
+        };
+      }).toList();
       await ApiService.createBooking(
         venueId: venueId,
-        date: DateTime.parse(bookingDate),
-        startTime: timeSlots.first.split(' - ').first,
-        endTime: timeSlots.last.split(' - ').last,
-        totalPrice: totalAmount.toDouble(),
-        additionalInfo: {
-          'paymentStatus': paymentStatus,
-          'paymentMethod': paymentMethod,
-          'paymentId': paymentId,
-        },
+        bookingDate: bookingDate,
+        timeSlots: slots,
       );
     } catch (e) {
       print('Failed to sync booking with backend: $e');

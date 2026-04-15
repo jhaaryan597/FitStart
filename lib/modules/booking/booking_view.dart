@@ -56,6 +56,7 @@ class _BookingViewState extends State<BookingView> {
 
   // Razorpay
   late RazorpayService _razorpayService;
+  String? _pendingBookingId;
 
   // Favorites
   bool _isFavorite = false;
@@ -153,17 +154,71 @@ class _BookingViewState extends State<BookingView> {
     }
   }
 
-  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    // Payment was successful
-    DateTime selectedDateTime =
-        DateTime(_selectedYear, _selectedMonth, _selectedDate);
+  /// Creates booking on backend first, then opens Razorpay with the
+  /// server-returned key and order ID. This is the correct order of operations.
+  Future<void> _handleOnlinePayment() async {
+    final dateStr =
+        '$_selectedYear-${_selectedMonth.toString().padLeft(2, '0')}-${_selectedDate.toString().padLeft(2, '0')}';
+    final selectedDateTime = DateTime(_selectedYear, _selectedMonth, _selectedDate);
+    final description = "Booking for ${widget.field.name} on ${dateFormat.format(selectedDateTime)}";
 
-    // Book the slots in our availability system
+    // Parse "07:00 - 08:00" strings into {startTime, endTime} maps
+    final timeSlots = _selectedTimes.map((t) {
+      final parts = t.split(' - ');
+      return {'startTime': parts[0].trim(), 'endTime': parts.length > 1 ? parts[1].trim() : parts[0].trim()};
+    }).toList();
+
+    final result = await ApiService.createBooking(
+      venueId: widget.field.id,
+      bookingDate: dateStr,
+      timeSlots: timeSlots,
+    );
+
+    if (!result['success']) {
+      if (mounted) _showSnackBar(context, result['error'] ?? 'Failed to create booking');
+      return;
+    }
+
+    final bookingId = result['data']?['_id'] as String?;
+    final razorpayOrderId = result['razorpayOrderId'] as String?;
+    final razorpayKeyId = result['razorpayKeyId'] as String?;
+
+    if (bookingId == null || razorpayOrderId == null || razorpayKeyId == null) {
+      if (mounted) _showSnackBar(context, 'Payment setup failed. Try again.');
+      return;
+    }
+
+    _pendingBookingId = bookingId;
+
+    _razorpayService.openCheckout(
+      amount: _totalBill * 100,
+      razorpayKey: razorpayKeyId,
+      orderId: razorpayOrderId,
+      name: widget.field.name,
+      description: description,
+      prefillEmail: _userEmail ?? 'guest@fitstart.local',
+    );
+  }
+
+  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
+    // Verify the payment on the backend using the booking created in _handleOnlinePayment
+    if (_pendingBookingId != null) {
+      final verified = await ApiService.verifyPayment(
+        bookingId: _pendingBookingId!,
+        razorpayPaymentId: response.paymentId ?? '',
+        razorpayOrderId: response.orderId ?? '',
+        razorpaySignature: response.signature ?? '',
+      );
+      if (!verified && mounted) {
+        _showSnackBar(context, 'Payment received but confirmation failed. Contact support.');
+      }
+    }
+
+    // Update local slot availability
     final dateStr =
         '$_selectedYear-${_selectedMonth.toString().padLeft(2, '0')}-${_selectedDate.toString().padLeft(2, '0')}';
     final userEmail = _userEmail ?? 'guest@fitstart.local';
-
-    final bookingResult = await BookingAvailabilityService.bookMultipleSlots(
+    await BookingAvailabilityService.bookMultipleSlots(
       venueId: widget.field.id,
       date: dateStr,
       timeSlots: _selectedTimes,
@@ -174,14 +229,8 @@ class _BookingViewState extends State<BookingView> {
       maxCapacity: _isGym ? _getGymCapacity() : null,
     );
 
-    if (!bookingResult.success) {
-      if (mounted) {
-        _showSnackBar(context, bookingResult.message);
-      }
-      return;
-    }
-
-    // Add to dummy list for backward compatibility
+    // Add to local list for immediate UI update
+    final selectedDateTime = DateTime(_selectedYear, _selectedMonth, _selectedDate);
     dummyUserOrderList.add(
       FieldOrder(
         field: widget.field,
@@ -191,24 +240,15 @@ class _BookingViewState extends State<BookingView> {
       ),
     );
 
-    // Save to Supabase
-    await _saveOrderToSupabase(
-      paymentStatus: 'paid',
-      paymentMethod: 'razorpay',
-      razorpayPaymentId: response.paymentId,
-      razorpayOrderId: response.orderId,
-      razorpaySignature: response.signature,
-    );
+    _pendingBookingId = null;
 
     if (mounted) {
-      // Navigate to Transaction History screen with bottom nav bar
       Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
               builder: (context) => const RootView(currentScreen: 2)),
           (route) => false);
-
-      _showSnackBar(context, "Payment successful! Booking confirmed.");
+      _showSnackBar(context, 'Payment successful! Booking confirmed.');
     }
   }
 
@@ -216,8 +256,6 @@ class _BookingViewState extends State<BookingView> {
     required String paymentStatus,
     required String paymentMethod,
     String? razorpayPaymentId,
-    String? razorpayOrderId,
-    String? razorpaySignature,
   }) async {
     try {
       DateTime selectedDateTime =
@@ -259,23 +297,16 @@ class _BookingViewState extends State<BookingView> {
       await LocalBookingService.saveBooking(bookingData);
       print('✅ Booking saved locally successfully');
 
-      // Then save to API
+      // Then save to API (pay-at-venue only — online payments use verifyPayment)
       print('🌐 Attempting to save booking to API...');
+      final slots = _selectedTimes.map((t) {
+        final parts = t.split(' - ');
+        return {'startTime': parts[0].trim(), 'endTime': parts.length > 1 ? parts[1].trim() : parts[0].trim()};
+      }).toList();
       await ApiService.createBooking(
         venueId: widget.field.id,
-        date: selectedDateTime,
-        startTime: _selectedTimes.isNotEmpty ? _selectedTimes.first : '00:00',
-        endTime: _selectedTimes.isNotEmpty ? _selectedTimes.last : '23:59',
-        totalPrice: _totalBill.toDouble(),
-        additionalInfo: {
-          'venue_name': widget.field.name,
-          'booking_times': _selectedTimes,
-          'payment_status': paymentStatus,
-          'payment_method': paymentMethod,
-          'razorpay_payment_id': razorpayPaymentId,
-          'razorpay_order_id': razorpayOrderId,
-          'razorpay_signature': razorpaySignature,
-        },
+        bookingDate: dateStr,
+        timeSlots: slots,
       );
     } catch (e) {
       print('Error saving order: $e');
@@ -924,20 +955,7 @@ class _BookingViewState extends State<BookingView> {
               InkWell(
                 onTap: () {
                   Navigator.pop(context);
-                  // Open Razorpay payment
-                  DateTime selectedDateTime =
-                      DateTime(_selectedYear, _selectedMonth, _selectedDate);
-
-                  String description =
-                      "Booking for ${widget.field.name} on ${dateFormat.format(selectedDateTime)}";
-
-                  _razorpayService.openCheckout(
-                    amount: _totalBill * 100, // Convert to paisa
-                    name: widget.field.name,
-                    description: description,
-                    prefillContact: '9999999999',
-                    prefillEmail: 'test@example.com',
-                  );
+                  _handleOnlinePayment();
                 },
                 child: Container(
                   padding: const EdgeInsets.all(16),

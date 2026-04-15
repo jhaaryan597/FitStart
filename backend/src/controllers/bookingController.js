@@ -117,12 +117,33 @@ exports.createBooking = async (req, res, next) => {
       });
     }
 
+    // Validate booking date — must not be in the past or more than 90 days ahead
+    const bookingDateObj = new Date(bookingDate);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 90);
+
+    if (isNaN(bookingDateObj.getTime())) {
+      return res.status(400).json({ success: false, message: 'Invalid booking date' });
+    }
+    if (bookingDateObj < now) {
+      return res.status(400).json({ success: false, message: 'Booking date cannot be in the past' });
+    }
+    if (bookingDateObj > maxDate) {
+      return res.status(400).json({ success: false, message: 'Cannot book more than 90 days in advance' });
+    }
+
+    const timeToMinutes = (t) => {
+      const [h, m] = String(t).split(':').map(Number);
+      return h * 60 + (m || 0);
+    };
+
     const hasInvalidSlot = timeSlots.some(
       (slot) =>
         !slot?.startTime ||
         !slot?.endTime ||
-        parseInt(String(slot.startTime).split(':')[0], 10) >=
-          parseInt(String(slot.endTime).split(':')[0], 10)
+        timeToMinutes(slot.startTime) >= timeToMinutes(slot.endTime)
     );
 
     if (hasInvalidSlot) {
@@ -150,11 +171,11 @@ exports.createBooking = async (req, res, next) => {
       });
     }
 
-    // Calculate total hours and amount
+    // Calculate total hours and amount (supports half-hour slots)
     const totalHours = timeSlots.reduce((sum, slot) => {
-      const start = parseInt(slot.startTime.split(':')[0]);
-      const end = parseInt(slot.endTime.split(':')[0]);
-      return sum + (end - start);
+      const startMins = timeToMinutes(slot.startTime);
+      const endMins = timeToMinutes(slot.endTime);
+      return sum + (endMins - startMins) / 60;
     }, 0);
 
     const totalAmount = totalHours * venue.pricing.hourlyRate;
@@ -202,51 +223,51 @@ exports.verifyPayment = async (req, res, next) => {
   try {
     const { razorpayPaymentId, razorpaySignature } = req.body;
 
-    const booking = await Booking.findById(req.params.id).populate('venue');
+    // Fetch the booking and check ownership before doing any crypto work
+    const rawBooking = await Booking.findById(req.params.id);
 
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found',
-      });
+    if (!rawBooking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    if (booking.payment?.status === 'completed') {
-      return res.status(400).json({
-        success: false,
-        message: 'Payment already verified for this booking',
-      });
+    if (rawBooking.user.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Not authorized to verify payment for this booking' });
     }
 
-    // Check ownership before accepting payment verification
-    if (booking.user.toString() !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to verify payment for this booking',
-      });
+    if (rawBooking.payment?.status === 'completed') {
+      return res.status(400).json({ success: false, message: 'Payment already verified for this booking' });
     }
 
-    // Verify signature
-    const text = booking.payment.razorpayOrderId + '|' + razorpayPaymentId;
+    // Verify Razorpay signature before touching the DB
+    const text = rawBooking.payment.razorpayOrderId + '|' + razorpayPaymentId;
     const expectedSignature = crypto
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
       .update(text)
       .digest('hex');
 
     if (expectedSignature !== razorpaySignature) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid payment signature',
-      });
+      return res.status(400).json({ success: false, message: 'Invalid payment signature' });
     }
 
-    // Update booking
-    booking.payment.status = 'completed';
-    booking.payment.razorpayPaymentId = razorpayPaymentId;
-    booking.payment.razorpaySignature = razorpaySignature;
-    booking.payment.paidAt = Date.now();
-    booking.bookingStatus = 'confirmed';
-    await booking.save();
+    // Atomic update — only succeeds if payment is still pending,
+    // preventing a double-verification race condition
+    const booking = await Booking.findOneAndUpdate(
+      { _id: req.params.id, 'payment.status': { $ne: 'completed' } },
+      {
+        $set: {
+          'payment.status': 'completed',
+          'payment.razorpayPaymentId': razorpayPaymentId,
+          'payment.razorpaySignature': razorpaySignature,
+          'payment.paidAt': new Date(),
+          bookingStatus: 'confirmed',
+        },
+      },
+      { new: true }
+    ).populate('venue');
+
+    if (!booking) {
+      return res.status(400).json({ success: false, message: 'Payment already verified for this booking' });
+    }
 
     // Update venue booking count
     booking.venue.bookingCount += 1;
@@ -317,14 +338,10 @@ exports.cancelBooking = async (req, res, next) => {
       });
     }
 
-    // Check if already Cancelled
-    if (
-      booking.bookingStatus === 'Cancelled' ||
-      booking.bookingStatus === 'cancelled'
-    ) {
+    if (booking.bookingStatus === 'cancelled') {
       return res.status(400).json({
         success: false,
-        message: 'Booking is already Cancelled',
+        message: 'Booking is already cancelled',
       });
     }
 
@@ -338,9 +355,8 @@ exports.cancelBooking = async (req, res, next) => {
     }
 
     booking.bookingStatus = 'cancelled';
-    booking.cancellationReason = reason;
+    booking.cancellationReason = reason ? String(reason).slice(0, 500) : undefined;
     booking.cancelledAt = Date.now();
-    booking.CancelledAt = booking.cancelledAt;
     await booking.save();
 
     // Send cancellation notification
@@ -351,7 +367,7 @@ exports.cancelBooking = async (req, res, next) => {
       try {
         await sendNotification(fcmToken, {
           title: 'Booking Cancelled',
-          body: `Your booking at ${booking.venue.name} has been Cancelled.`,
+          body: `Your booking at ${booking.venue.name} has been cancelled.`,
           data: {
             type: 'booking',
             bookingId: booking._id.toString(),
@@ -364,7 +380,7 @@ exports.cancelBooking = async (req, res, next) => {
       await Notification.create({
         user: booking.user,
         title: 'Booking Cancelled',
-        body: `Your booking at ${booking.venue.name} has been Cancelled.`,
+        body: `Your booking at ${booking.venue.name} has been cancelled.`,
         type: 'booking',
         data: {
           bookingId: booking._id.toString(),
@@ -375,7 +391,7 @@ exports.cancelBooking = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Booking Cancelled successfully',
+      message: 'Booking cancelled successfully',
       data: booking,
     });
   } catch (error) {

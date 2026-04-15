@@ -207,7 +207,7 @@ class ApiService {
       final response = await http.post(
         Uri.parse('$baseUrl/auth/fcm-token'),
         headers: await getHeaders(),
-        body: jsonEncode({'fcmToken': fcmToken}),
+        body: jsonEncode({'token': fcmToken, 'platform': 'android'}),
       );
 
       return response.statusCode == 200;
@@ -285,8 +285,13 @@ class ApiService {
     double maxDistance = 10.0,
   }) async {
     try {
+      final uri = Uri.parse('$baseUrl/venues/nearby').replace(queryParameters: {
+        'latitude': latitude.toString(),
+        'longitude': longitude.toString(),
+        'maxDistance': maxDistance.toString(),
+      });
       final response = await http.get(
-        Uri.parse('$baseUrl/venues/nearby/$latitude/$longitude?maxDistance=$maxDistance'),
+        uri,
         headers: await getHeaders(includeAuth: false),
       );
 
@@ -320,7 +325,8 @@ class ApiService {
   /// Remove venue from favorites
   static Future<bool> removeFromFavorites(String venueId) async {
     try {
-      final response = await http.delete(
+      // Backend uses a single POST toggle endpoint for both add and remove
+      final response = await http.post(
         Uri.parse('$baseUrl/venues/$venueId/favorite'),
         headers: await getHeaders(),
       );
@@ -374,33 +380,36 @@ class ApiService {
     }
   }
 
-  /// Create a new booking
+  /// Create a new booking.
+  /// [bookingDate] — ISO date string e.g. "2026-04-20"
+  /// [timeSlots]   — list of {startTime: "10:00", endTime: "11:00"} maps
   static Future<Map<String, dynamic>> createBooking({
     required String venueId,
-    required DateTime date,
-    required String startTime,
-    required String endTime,
-    double? totalPrice,
-    Map<String, dynamic>? additionalInfo,
+    required String bookingDate,
+    required List<Map<String, String>> timeSlots,
+    String? notes,
   }) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/bookings'),
         headers: await getHeaders(),
         body: jsonEncode({
-          'venue': venueId,
-          'date': date.toIso8601String(),
-          'startTime': startTime,
-          'endTime': endTime,
-          'totalPrice': totalPrice,
-          'additionalInfo': additionalInfo,
+          'venueId': venueId,
+          'bookingDate': bookingDate,
+          'timeSlots': timeSlots,
+          if (notes != null) 'notes': notes,
         }),
       );
 
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 201) {
-        return {'success': true, 'data': data['data']};
+        return {
+          'success': true,
+          'data': data['data'],
+          'razorpayOrderId': data['razorpayOrderId'],
+          'razorpayKeyId': data['razorpayKeyId'],
+        };
       } else {
         return {'success': false, 'error': data['message'] ?? 'Failed to create booking'};
       }
